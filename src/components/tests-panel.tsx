@@ -1095,22 +1095,24 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(90dvh,48rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-4">
             <DialogTitle>New test case</DialogTitle>
             <DialogDescription>Add a new test case to this project.</DialogDescription>
           </DialogHeader>
-          <form className="space-y-4" onSubmit={createTestCase}>
-            <CaseFormFields
-              showAdvanced={createShowAdvanced}
-              setShowAdvanced={setCreateShowAdvanced}
-              testCasePrefix={testCasePrefix}
-            />
-            <div className="flex justify-end gap-3 pt-2">
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={createTestCase}>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <CaseFormFields
+                showAdvanced={createShowAdvanced}
+                setShowAdvanced={setCreateShowAdvanced}
+                testCasePrefix={testCasePrefix}
+              />
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-4 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={creatingCase}>
+              <Button type="submit" disabled={creatingCase} className="w-full sm:w-auto">
                 {creatingCase ? "Saving…" : "Create test case"}
               </Button>
             </div>
@@ -1120,24 +1122,26 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
       {/* ── Edit test case dialog ── */}
       <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(90dvh,48rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-4">
             <DialogTitle>Edit test case</DialogTitle>
             <DialogDescription>Update the test case details.</DialogDescription>
           </DialogHeader>
-          <form key={editTarget?.id} className="space-y-4" onSubmit={saveEdit}>
-            <CaseFormFields
-              showAdvanced={editShowAdvanced}
-              setShowAdvanced={setEditShowAdvanced}
-              defaults={editTarget ?? undefined}
-              testCasePrefix={testCasePrefix}
-              readOnlyDisplayId={editTarget?.displayId}
-            />
-            <div className="flex justify-end gap-3 pt-2">
+          <form key={editTarget?.id} className="flex min-h-0 flex-1 flex-col" onSubmit={saveEdit}>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <CaseFormFields
+                showAdvanced={editShowAdvanced}
+                setShowAdvanced={setEditShowAdvanced}
+                defaults={editTarget ?? undefined}
+                testCasePrefix={testCasePrefix}
+                readOnlyDisplayId={editTarget?.displayId}
+              />
+            </div>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-4 sm:flex-row sm:justify-end">
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={savingEdit}>
+              <Button type="submit" disabled={savingEdit} className="w-full sm:w-auto">
                 {savingEdit ? "Saving…" : "Save changes"}
               </Button>
             </div>
@@ -1147,18 +1151,18 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
       {/* ── Delete confirm dialog ── */}
       <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[min(95vw,28rem)]">
           <DialogHeader>
             <DialogTitle>Delete test case?</DialogTitle>
             <DialogDescription>
               &ldquo;{deleteTarget?.title}&rdquo; will be permanently deleted. Historical run data remains untouched.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={() => setDeleteTarget(null)}>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={deletingCase} onClick={confirmDelete}>
+            <Button variant="destructive" className="w-full sm:w-auto" disabled={deletingCase} onClick={confirmDelete}>
               {deletingCase ? "Deleting…" : "Delete"}
             </Button>
           </div>
@@ -1167,18 +1171,18 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
       {/* ── Bulk delete confirm dialog ── */}
       <Dialog open={showBulkDeleteDialog} onOpenChange={(open) => { if (!open && !bulkDeleting) setShowBulkDeleteDialog(false); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-[min(95vw,28rem)]">
           <DialogHeader>
             <DialogTitle>Delete {selectedIds.size} test case{selectedIds.size !== 1 ? "s" : ""}?</DialogTitle>
             <DialogDescription>
               This will permanently delete {selectedIds.size} test case{selectedIds.size !== 1 ? "s" : ""}. Historical run data remains untouched.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" disabled={bulkDeleting} onClick={() => setShowBulkDeleteDialog(false)}>
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+            <Button type="button" variant="outline" className="w-full sm:w-auto" disabled={bulkDeleting} onClick={() => setShowBulkDeleteDialog(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" disabled={bulkDeleting} onClick={confirmBulkDelete}>
+            <Button variant="destructive" className="w-full sm:w-auto" disabled={bulkDeleting} onClick={confirmBulkDelete}>
               {bulkDeleting ? (
                 <span className="flex items-center gap-2">
                   <svg className="animate-spin size-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -1207,8 +1211,8 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
           }
         }
       }}>
-        <DialogContent className={importStep === "map" ? "max-w-2xl" : importStep === "jira-review" ? "max-w-xl" : "max-w-lg"}>
-          <DialogHeader>
+        <DialogContent className={`flex max-h-[min(90dvh,48rem)] flex-col gap-0 overflow-hidden p-0 ${importStep === "map" ? "max-w-2xl" : importStep === "jira-review" ? "max-w-xl" : "max-w-lg"}`}>
+          <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-4">
             <DialogTitle>Import test cases</DialogTitle>
             <DialogDescription>
               {importStep === "select"
@@ -1219,117 +1223,120 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
             </DialogDescription>
           </DialogHeader>
 
-          <form className="space-y-4" onSubmit={handleImport}>
-            {importStep === "select" ? (
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".xlsx,.csv"
-                onChange={handleFileSelect}
-                className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-muted file:text-foreground hover:file:bg-muted/80"
-              />
-            ) : importStep === "jira-review" && jiraAnalysis ? (
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  We can automatically fix some JIRA keys to match the required format (e.g. AC-03).
-                </p>
-                <div className="rounded-lg border border-border overflow-hidden">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="bg-muted/40 border-b border-border">
-                        <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Row</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Original</th>
-                        <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Corrected to</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {jiraAnalysis.rows.map((row) => (
-                        <tr key={row.rowNumber}>
-                          <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.rowNumber}</td>
-                          <td className="px-3 py-2 font-mono">{row.original}</td>
-                          <td className="px-3 py-2">
-                            {row.corrected !== null ? (
-                              <span className="flex items-center gap-1.5 text-foreground">
-                                <span className="font-mono">{row.corrected}</span>
-                                <svg className="h-3.5 w-3.5 text-[var(--success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                              </span>
-                            ) : (
-                              <span className="text-muted-foreground/50">(will be skipped)</span>
-                            )}
-                          </td>
+          <form className="flex min-h-0 flex-1 flex-col" onSubmit={handleImport}>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+              {importStep === "select" ? (
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx,.csv"
+                  onChange={handleFileSelect}
+                  className="block w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:bg-muted file:text-foreground hover:file:bg-muted/80"
+                />
+              ) : importStep === "jira-review" && jiraAnalysis ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">
+                    We can automatically fix some JIRA keys to match the required format (e.g. AC-03).
+                  </p>
+                  <div className="rounded-lg border border-border">
+                    <table className="w-full text-sm">
+                      <thead className="bg-muted/60">
+                        <tr className="border-b border-border">
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Row</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Original</th>
+                          <th className="px-3 py-2 text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">Corrected to</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {jiraAnalysis.willCorrect > 0 && `${jiraAnalysis.willCorrect} will be corrected`}
-                  {jiraAnalysis.willCorrect > 0 && jiraAnalysis.willSkip > 0 && " · "}
-                  {jiraAnalysis.willSkip > 0 && `${jiraAnalysis.willSkip} will be skipped`}
-                </p>
-              </div>
-            ) : csvHeaders.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-2">
-                Column names will be read directly from the .xlsx file. Make sure your spreadsheet has a header row with names like <strong>title</strong>, description, module, priority, status, tags, preconditions, expectedResult, and jira.
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4 py-2">
-                {[
-                  { id: "title", label: "Title *", required: true },
-                  { id: "description", label: "Test Steps" },
-                  { id: "module", label: "Module" },
-                  { id: "priority", label: "Priority" },
-                  { id: "status", label: "Status" },
-                  { id: "tags", label: "Tags" },
-                  { id: "preconditions", label: "Preconditions" },
-                  { id: "expectedResult", label: "Expected Result" },
-                  { id: "jira", label: "Jira Reference" },
-                ].map((field) => (
-                  <div key={field.id} className="space-y-1.5">
-                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {field.label}
-                    </Label>
-                    <Select
-                      value={columnMapping[field.id] || "none"}
-                      onValueChange={(val) => setColumnMapping(prev => ({
-                        ...prev,
-                        [field.id]: val === "none" ? "" : val
-                      }) as Record<string, string>)}
-                    >
-                      <SelectTrigger className="h-9">
-                        <SelectValue placeholder="Select column..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">-- Skip --</SelectItem>
-                        {csvHeaders.map(h => (
-                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                      </thead>
+                      <tbody className="divide-y divide-border">
+                        {jiraAnalysis.rows.map((row) => (
+                          <tr key={row.rowNumber}>
+                            <td className="px-3 py-2 tabular-nums text-muted-foreground">{row.rowNumber}</td>
+                            <td className="px-3 py-2 font-mono">{row.original}</td>
+                            <td className="px-3 py-2">
+                              {row.corrected !== null ? (
+                                <span className="flex items-center gap-1.5 text-foreground">
+                                  <span className="font-mono">{row.corrected}</span>
+                                  <svg className="h-3.5 w-3.5 text-[var(--success)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground/50">(will be skipped)</span>
+                              )}
+                            </td>
+                          </tr>
                         ))}
-                      </SelectContent>
-                    </Select>
+                      </tbody>
+                    </table>
                   </div>
-                ))}
-              </div>
-            )}
+                  <p className="text-xs text-muted-foreground">
+                    {jiraAnalysis.willCorrect > 0 && `${jiraAnalysis.willCorrect} will be corrected`}
+                    {jiraAnalysis.willCorrect > 0 && jiraAnalysis.willSkip > 0 && " · "}
+                    {jiraAnalysis.willSkip > 0 && `${jiraAnalysis.willSkip} will be skipped`}
+                  </p>
+                </div>
+              ) : csvHeaders.length === 0 ? (
+                <p className="py-2 text-sm text-muted-foreground">
+                  Column names will be read directly from the .xlsx file. Make sure your spreadsheet has a header row with names like <strong>title</strong>, description, module, priority, status, tags, preconditions, expectedResult, and jira.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 gap-x-6 gap-y-4 py-2 sm:grid-cols-2">
+                  {[
+                    { id: "title", label: "Title *", required: true },
+                    { id: "description", label: "Test Steps" },
+                    { id: "module", label: "Module" },
+                    { id: "priority", label: "Priority" },
+                    { id: "status", label: "Status" },
+                    { id: "tags", label: "Tags" },
+                    { id: "preconditions", label: "Preconditions" },
+                    { id: "expectedResult", label: "Expected Result" },
+                    { id: "jira", label: "Jira Reference" },
+                  ].map((field) => (
+                    <div key={field.id} className="space-y-1.5">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {field.label}
+                      </Label>
+                      <Select
+                        value={columnMapping[field.id] || "none"}
+                        onValueChange={(val) => setColumnMapping(prev => ({
+                          ...prev,
+                          [field.id]: val === "none" ? "" : val
+                        }) as Record<string, string>)}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue placeholder="Select column..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">-- Skip --</SelectItem>
+                          {csvHeaders.map(h => (
+                            <SelectItem key={h} value={h}>{h}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
 
-            <div className="flex justify-end gap-3 pt-2">
-              <Button type="button" variant="outline" onClick={() => setShowImportDialog(false)}>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-4 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowImportDialog(false)}>
                 Cancel
               </Button>
               {importStep === "map" && (
-                <Button type="button" variant="ghost" onClick={() => setImportStep("select")}>
+                <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => setImportStep("select")}>
                   Back
                 </Button>
               )}
               {importStep === "jira-review" && (
-                <Button type="button" variant="ghost" onClick={() => setImportStep("map")}>
+                <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={() => setImportStep("map")}>
                   Back to mapping
                 </Button>
               )}
               {importStep === "jira-review" ? (
                 <Button
                   type="button"
+                  className="w-full sm:w-auto"
                   disabled={importing}
                   onClick={() => {
                     const file = selectedFile ?? fileInputRef.current?.files?.[0] ?? null;
@@ -1339,7 +1346,7 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
                   {importing ? "Importing…" : "Apply corrections & import"}
                 </Button>
               ) : (
-                <Button type="submit" disabled={importing || (importStep === "select" && !selectedFile)}>
+                <Button type="submit" className="w-full sm:w-auto" disabled={importing || (importStep === "select" && !selectedFile)}>
                   {importing ? "Importing…" : importStep === "select" ? "Next" : "Next"}
                 </Button>
               )}
@@ -1362,7 +1369,7 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
             <DialogDescription>Group test cases into a named suite.</DialogDescription>
           </DialogHeader>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={createSuite}>
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-5 px-6 py-5">
               <div className="space-y-1.5">
                 <Label htmlFor="suite-name">Suite name *</Label>
                 <Input id="suite-name" name="name" required placeholder="e.g. Smoke Tests" />
@@ -1434,7 +1441,7 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
                     )}
                   </div>
                 )}
-                <div className="max-h-52 overflow-auto rounded-lg border border-border">
+                <div className="rounded-lg border border-border">
                   <div className="space-y-0.5 p-2">
                     {filteredSuiteCases.map((tc) => {
                       const selected = suiteSelectedCases.includes(tc.id);
@@ -1474,11 +1481,11 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
                 </p>
               </div>
             </div>
-            <div className="shrink-0 border-t border-border px-6 py-4 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => setShowCreateSuiteDialog(false)}>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-6 py-4 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setShowCreateSuiteDialog(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={creatingSuite}>
+              <Button type="submit" className="w-full sm:w-auto" disabled={creatingSuite}>
                 {creatingSuite ? "Creating…" : "Create suite"}
               </Button>
             </div>
@@ -1506,7 +1513,7 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
             </DialogDescription>
           </DialogHeader>
           <form className="flex min-h-0 flex-1 flex-col" onSubmit={saveSuiteMembership}>
-            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto space-y-4 px-6 py-5">
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span />
@@ -1571,7 +1578,7 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
                   </div>
                 )}
               </div>
-              <div className="max-h-64 overflow-auto rounded-lg border border-border">
+              <div className="rounded-lg border border-border">
                 <div className="space-y-0.5 p-2">
                   {filteredManageCases.map((tc) => {
                     const selected = manageSelectedCases.includes(tc.id);
@@ -1611,11 +1618,11 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
                 {manageSelectedCases.length} case{manageSelectedCases.length !== 1 ? "s" : ""} selected
               </p>
             </div>
-            <div className="shrink-0 border-t border-border px-6 py-4 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={() => setManageSuiteTarget(null)}>
+            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-6 py-4 sm:flex-row sm:justify-end">
+              <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setManageSuiteTarget(null)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={updatingSuiteCases}>
+              <Button type="submit" className="w-full sm:w-auto" disabled={updatingSuiteCases}>
                 {updatingSuiteCases ? "Saving…" : "Save changes"}
               </Button>
             </div>
