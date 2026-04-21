@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
@@ -72,6 +73,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
+    if (payload.testCaseIds.length > 0) {
+      const count = await db.testCase.count({
+        where: { id: { in: payload.testCaseIds }, projectId: project.id },
+      });
+      if (count !== payload.testCaseIds.length) {
+        return NextResponse.json(
+          { error: "One or more test case IDs do not belong to this project." },
+          { status: 422 }
+        );
+      }
+    }
+
     const suite = await db.testSuite.create({
       data: {
         projectId: project.id,
@@ -109,6 +122,12 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Invalid payload.", issues: error.issues }, { status: 400 });
+    }
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      return NextResponse.json(
+        { error: "A suite with this name already exists in this project." },
+        { status: 409 }
+      );
     }
     console.error("[POST /api/test-suites]", error);
     return NextResponse.json({ error: "Unable to create test suite." }, { status: 500 });
