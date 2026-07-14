@@ -41,21 +41,50 @@ function SettingsIcon() {
   );
 }
 
-function navItems(projectId: string) {
+function BugsIcon() {
+  return (
+    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M12 4.5v3m0 9v3m-7.5-7.5h3m9 0h3M6.34 6.34l2.12 2.12m6.88 6.88l2.12 2.12M6.34 17.66l2.12-2.12m6.88-6.88l2.12-2.12" />
+      <circle cx="12" cy="12" r="4.5" />
+    </svg>
+  );
+}
+
+function QualityIcon() {
+  return (
+    <svg className="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75} aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
+function navItems(projectId: string, showBugTracking: boolean) {
   return [
     { href: `/dashboard/${projectId}`, label: "Overview", icon: <OverviewIcon />, exact: true },
     { href: `/dashboard/${projectId}/tests`, label: "Tests", icon: <TestsIcon />, exact: false },
     { href: `/dashboard/${projectId}/metrics`, label: "Metrics", icon: <MetricsIcon />, exact: false },
+    ...(showBugTracking
+      ? [
+          { href: `/dashboard/${projectId}/bugs`, label: "Bugs", icon: <BugsIcon />, exact: false },
+          { href: `/dashboard/${projectId}/quality`, label: "Quality", icon: <QualityIcon />, exact: false },
+        ]
+      : []),
     { href: `/dashboard/${projectId}/settings`, label: "Settings", icon: <SettingsIcon />, exact: false },
   ];
 }
 
-export function DashboardNav({ projectId }: { projectId: string }) {
+export function DashboardNav({
+  projectId,
+  showBugTracking = false,
+}: {
+  projectId: string;
+  showBugTracking?: boolean;
+}) {
   const pathname = usePathname();
 
   return (
     <nav className="flex flex-col gap-0.5 px-3">
-      {navItems(projectId).map((item) => {
+      {navItems(projectId, showBugTracking).map((item) => {
         const isActive = item.exact
           ? pathname === item.href
           : pathname.startsWith(item.href);

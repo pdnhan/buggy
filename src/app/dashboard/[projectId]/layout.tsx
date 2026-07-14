@@ -3,6 +3,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { userHasProjectAccess } from "@/lib/projects";
+import { getFeatureFlags } from "@/lib/feature-flags";
 import { DashboardNav } from "@/components/dashboard-nav";
 import { CopyProjectId } from "@/components/copy-project-id";
 import { LogoutButton } from "@/components/logout-button";
@@ -35,6 +36,8 @@ export default async function ProjectLayout({
   });
 
   if (!project) notFound();
+
+  const flags = await getFeatureFlags();
 
   return (
     <div className="flex min-h-screen">
@@ -93,7 +96,7 @@ export default async function ProjectLayout({
 
         {/* Navigation */}
         <div className="flex-1 py-3">
-          <DashboardNav projectId={project.id} />
+          <DashboardNav projectId={project.id} showBugTracking={flags.enableBugTracking} />
         </div>
 
         {/* Footer actions */}

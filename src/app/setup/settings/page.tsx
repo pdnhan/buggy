@@ -45,9 +45,19 @@ const flags = [
     description: "Enable release and defect report tracking in all projects.",
     envVar: "ENABLE_RELEASE_TRACKING",
   },
+  {
+    key: "enableBugTracking" as const,
+    label: "Bug Quality Tracking",
+    description: "Enable the bug register and monthly quality dashboard in all projects.",
+    envVar: "ENABLE_BUG_TRACKING",
+  },
 ];
 
-type FlagKey = "openRegistration" | "enableSessionTesting" | "enableReleaseTracking";
+type FlagKey =
+  | "openRegistration"
+  | "enableSessionTesting"
+  | "enableReleaseTracking"
+  | "enableBugTracking";
 
 export default function SetupSettingsPage() {
   const router = useRouter();
@@ -55,6 +65,7 @@ export default function SetupSettingsPage() {
     openRegistration: false,
     enableSessionTesting: false,
     enableReleaseTracking: false,
+    enableBugTracking: false,
   });
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
