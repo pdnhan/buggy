@@ -26,6 +26,7 @@ describe("getFeatureFlags", () => {
     vi.clearAllMocks();
     delete process.env.ENABLE_SESSION_TESTING;
     delete process.env.ENABLE_RELEASE_TRACKING;
+    delete process.env.ENABLE_BUG_TRACKING;
   });
 
   it("returns DB values when a settings row exists", async () => {
@@ -33,6 +34,7 @@ describe("getFeatureFlags", () => {
       enableSessionTesting: true,
       enableReleaseTracking: false,
       openRegistration: true,
+      enableBugTracking: true,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +43,7 @@ describe("getFeatureFlags", () => {
       enableSessionTesting: true,
       enableReleaseTracking: false,
       openRegistration: true,
+      enableBugTracking: true,
     });
   });
 
@@ -48,12 +51,14 @@ describe("getFeatureFlags", () => {
     mockDb.workspaceSettings.findFirst.mockResolvedValue(null);
     process.env.ENABLE_SESSION_TESTING = "true";
     process.env.ENABLE_RELEASE_TRACKING = "true";
+    process.env.ENABLE_BUG_TRACKING = "true";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const flags = await (getFeatureFlags as any)();
     expect(flags.enableSessionTesting).toBe(true);
     expect(flags.enableReleaseTracking).toBe(true);
     expect(flags.openRegistration).toBe(false); // no env var for this one
+    expect(flags.enableBugTracking).toBe(true);
   });
 
   it("returns all false defaults when no settings row and no env vars", async () => {
@@ -65,6 +70,7 @@ describe("getFeatureFlags", () => {
       enableSessionTesting: false,
       enableReleaseTracking: false,
       openRegistration: false,
+      enableBugTracking: false,
     });
   });
 });

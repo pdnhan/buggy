@@ -1,6 +1,6 @@
 {
   "name": "itgrate-test-management",
-  "version": "0.5.3.0",
+  "version": "0.6.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",

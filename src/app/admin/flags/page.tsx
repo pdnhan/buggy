@@ -16,6 +16,7 @@ export default async function AdminFlagsPage() {
         enableSessionTesting: settings?.enableSessionTesting ?? false,
         enableReleaseTracking: settings?.enableReleaseTracking ?? false,
         openRegistration: settings?.openRegistration ?? false,
+        enableBugTracking: settings?.enableBugTracking ?? false,
       }}
     />
   );

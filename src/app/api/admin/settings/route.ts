@@ -9,6 +9,7 @@ const settingsSchema = z.object({
   enableSessionTesting: z.boolean().optional(),
   enableReleaseTracking: z.boolean().optional(),
   openRegistration: z.boolean().optional(),
+  enableBugTracking: z.boolean().optional(),
 });
 
 export async function GET() {
@@ -21,6 +22,7 @@ export async function GET() {
     enableSessionTesting: settings?.enableSessionTesting ?? false,
     enableReleaseTracking: settings?.enableReleaseTracking ?? false,
     openRegistration: settings?.openRegistration ?? false,
+    enableBugTracking: settings?.enableBugTracking ?? false,
   });
 }
 

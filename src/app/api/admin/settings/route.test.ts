@@ -57,6 +57,7 @@ describe("GET /api/admin/settings", () => {
       enableSessionTesting: true,
       enableReleaseTracking: false,
       openRegistration: true,
+      enableBugTracking: false,
     });
 
     const res = await GET();
@@ -66,6 +67,7 @@ describe("GET /api/admin/settings", () => {
       enableSessionTesting: true,
       enableReleaseTracking: false,
       openRegistration: true,
+      enableBugTracking: false,
     });
   });
 
@@ -79,6 +81,7 @@ describe("GET /api/admin/settings", () => {
       enableSessionTesting: false,
       enableReleaseTracking: false,
       openRegistration: false,
+      enableBugTracking: false,
     });
   });
 });

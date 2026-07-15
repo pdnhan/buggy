@@ -9,6 +9,7 @@ type Flags = {
   enableSessionTesting: boolean;
   enableReleaseTracking: boolean;
   openRegistration: boolean;
+  enableBugTracking: boolean;
 };
 
 const FLAG_META: {
@@ -25,6 +26,11 @@ const FLAG_META: {
     key: "enableReleaseTracking",
     label: "Release Tracking",
     description: "Show the Release Tracking section in project dashboards.",
+  },
+  {
+    key: "enableBugTracking",
+    label: "Bug Quality Tracking",
+    description: "Show the Bugs register and Quality dashboard in project dashboards.",
   },
   {
     key: "openRegistration",

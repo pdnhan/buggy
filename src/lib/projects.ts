@@ -120,6 +120,17 @@ export async function userIsProjectAdmin(userId: string, projectId: string): Pro
   return member?.role === "ADMIN";
 }
 
+export async function getProjectRole(
+  userId: string,
+  projectId: string
+): Promise<"ADMIN" | "MEMBER" | "VIEWER" | null> {
+  const member = await db.projectMember.findUnique({
+    where: { projectId_userId: { projectId, userId } },
+    select: { role: true },
+  });
+  return member?.role ?? null;
+}
+
 export async function userHasProjectAccess(userId: string, projectId: string) {
   const member = await db.projectMember.findUnique({
     where: {

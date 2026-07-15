@@ -5,14 +5,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.5.4.0] - 2026-04-21
+## [0.6.0.0] - 2026-07-14
 
-### Fixed
-- Suite creation cross-project validation — test suites can no longer be created in the wrong project.
-- Duplicate suite name error — creating a suite with an already-used name now returns a clear error.
+### Added
+- Monthly Bug Quality Tracking (MVP): project-scoped bug register with severity/priority/root-cause classification, automatic UAT/production leakage detection, and reopen-event tracking with system-calculated reopen counts.
+- Monthly Quality Dashboard: 14 core KPI cards with target-status badges, a monthly bug trend chart, a severity distribution chart, and a configurable reporting date basis (creation, detection, reopen, or closure date).
+- CSV export for the bug register (filter-aware) and for the monthly KPI dashboard.
+- Audit log entries for bug creation, status/severity/root-cause/assignment changes, leakage overrides, reopens, and deletion.
+- `ENABLE_BUG_TRACKING` feature flag (off by default) wired through the admin flags UI, the setup wizard, and project navigation — existing projects are unaffected until an admin opts in.
 
 ### Changed
-- Dialog UX improvements — flex layouts and responsive buttons for better usability.
+- Redesigned dialog UX across the Tests panel with scrollable content areas for long forms, responsive button stacking (vertical on mobile, horizontal on desktop), and border-separated headers and footers.
+
+### Fixed
+- Test suite creation now validates that all test case IDs belong to the target project before creating the suite, preventing foreign-key errors and cross-project data contamination.
+- Creating a test suite with a duplicate name now returns a 409 Conflict instead of a generic 500 error.
 
 ---
 

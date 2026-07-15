@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -146,23 +145,67 @@ const CASE_STATUS_DOT: Record<string, string> = {
   DEPRECATED: "bg-[var(--warning)]",
 };
 
+// ─── Redesign helpers (violet/mono palette) ────────────────────────────────────
+
+const PRIORITY_SHORT: Record<string, string> = {
+  CRITICAL: "CRIT",
+  HIGH: "HIGH",
+  MEDIUM: "MED",
+  LOW: "LOW",
+};
+
+/** Priority pill background/foreground for the redesign palette. */
+function prioPillStyle(priority: string): React.CSSProperties {
+  switch (priority) {
+    case "CRITICAL":
+      return { background: "var(--rd-fail-soft)", color: "var(--rd-fail)" };
+    case "HIGH":
+      return { background: "var(--rd-warn-soft)", color: "var(--rd-warn)" };
+    case "MEDIUM":
+      return { background: "var(--rd-panel2)", color: "var(--rd-muted)" };
+    default:
+      return { background: "transparent", color: "var(--rd-faint)" };
+  }
+}
+
+const RD_STATUS_DOT: Record<string, string> = {
+  ACTIVE: "var(--rd-pass)",
+  DRAFT: "var(--rd-faint)",
+  DEPRECATED: "var(--rd-warn)",
+};
+
+/** Small mono priority pill used throughout the redesigned Tests screen. */
+function PrioPill({ priority, className = "" }: { priority: string; className?: string }) {
+  return (
+    <span
+      className={cn("rd-mono rounded px-1.5 py-0.5 text-[10px] tracking-[0.06em]", className)}
+      style={prioPillStyle(priority)}
+    >
+      {PRIORITY_SHORT[priority] ?? priority}
+    </span>
+  );
+}
+
+// Shared redesign field styles
+const RD_INPUT =
+  "h-[34px] w-full rounded-md border border-[var(--rd-border)] bg-[var(--rd-panel)] px-2.5 text-[13px] text-[var(--rd-text)] outline-none focus:border-[var(--rd-border2)]";
+const RD_TEXTAREA =
+  "w-full rounded-md border border-[var(--rd-border)] bg-[var(--rd-panel)] px-2.5 py-2 text-[13px] text-[var(--rd-text)] outline-none focus:border-[var(--rd-border2)] resize-y";
+const RD_SELECT =
+  "h-[34px] w-full rounded-md border border-[var(--rd-border)] bg-[var(--rd-panel)] px-2 text-[13px] text-[var(--rd-text)] outline-none focus:border-[var(--rd-border2)]";
+
 // ─── Shared form fields ───────────────────────────────────────────────────────
 
 function CaseFormFields({
-  showAdvanced,
-  setShowAdvanced,
   defaults,
   testCasePrefix,
   readOnlyDisplayId,
 }: {
-  showAdvanced: boolean;
-  setShowAdvanced: (v: boolean) => void;
   defaults?: Partial<TestCaseItem>;
   testCasePrefix: string;
   readOnlyDisplayId?: string;
 }) {
   const prefixPreview = (testCasePrefix || "TC").toUpperCase();
-  const idHint = `${prefixPreview}-0001`;
   const [jiraHint, setJiraHint] = useState<{
     type: "corrected" | "invalid";
     original: string;
@@ -200,9 +243,9 @@ function CaseFormFields({
 
   return (
     <>
-      <div className="space-y-1">
-        <Label htmlFor="tc-title">Title *</Label>
-        <Input
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tc-title" className="rd-label">title *</label>
+        <input
           id="tc-title"
           name="title"
           type="text"
@@ -210,31 +253,25 @@ function CaseFormFields({
           placeholder="e.g. User can log in"
           maxLength={200}
           defaultValue={defaults?.title ?? ""}
+          className={RD_INPUT}
         />
-        <p className="text-xs text-muted-foreground">IDs auto-generate like {idHint} when saved.</p>
       </div>
 
-      {readOnlyDisplayId && (
-        <div className="space-y-1">
-          <Label>Case ID</Label>
-          <Input value={readOnlyDisplayId} readOnly disabled />
-        </div>
-      )}
-
       <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label htmlFor="tc-module">Module</Label>
-          <Input
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="tc-module" className="rd-label">module</label>
+          <input
             id="tc-module"
             name="module"
             type="text"
             placeholder="e.g. Auth"
             defaultValue={defaults?.module ?? ""}
+            className={RD_INPUT}
           />
         </div>
-        <div className="space-y-1">
-          <Label htmlFor="tc-jira">Jira reference</Label>
-          <Input
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="tc-jira" className="rd-label">jira ref</label>
+          <input
             id="tc-jira"
             name="jiraKey"
             type="text"
@@ -242,113 +279,93 @@ function CaseFormFields({
             defaultValue={defaults?.jiraKey ?? ""}
             onBlur={handleJiraBlur}
             onChange={() => setJiraHint(null)}
+            className={cn(RD_INPUT, "rd-mono")}
           />
           {jiraHint?.type === "corrected" && (
-            <p className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Will be saved as <span className="font-mono font-semibold">{jiraHint.corrected}</span>
+            <p className="flex items-center gap-1 text-[11px]" style={{ color: "var(--rd-warn)" }}>
+              Will be saved as <span className="rd-mono font-semibold">{jiraHint.corrected}</span>
             </p>
           )}
           {jiraHint?.type === "invalid" && (
-            <p className="flex items-center gap-1 text-xs text-destructive">
-              <svg className="h-3.5 w-3.5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
+            <p className="flex items-center gap-1 text-[11px]" style={{ color: "var(--rd-fail)" }}>
               Invalid format — use PROJECT-123
             </p>
           )}
         </div>
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="tc-description">Test steps</Label>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tc-description" className="rd-label">test steps</label>
         <textarea
           id="tc-description"
           name="description"
-          placeholder="Step-by-step test instructions"
+          rows={4}
+          placeholder={"1. Navigate to /login\n2. Enter credentials\n3. Submit"}
           defaultValue={defaults?.description ?? ""}
-          className="h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={RD_TEXTAREA}
         />
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="tc-expected-result">Expected result</Label>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tc-expected-result" className="rd-label">expected result</label>
         <textarea
           id="tc-expected-result"
           name="expectedResult"
+          rows={2}
           placeholder="e.g. User is redirected to the dashboard"
           defaultValue={defaults?.expectedResult ?? ""}
-          className="h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={RD_TEXTAREA}
         />
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="tc-preconditions">Preconditions</Label>
+      <div className="flex flex-col gap-1.5">
+        <label htmlFor="tc-preconditions" className="rd-label">preconditions</label>
         <textarea
           id="tc-preconditions"
           name="preconditions"
+          rows={2}
           placeholder="e.g. User must be registered"
           defaultValue={defaults?.preconditions ?? ""}
-          className="h-16 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className={RD_TEXTAREA}
         />
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor="tc-tags">Tags</Label>
-        <Input
-          id="tc-tags"
-          name="tags"
-          type="text"
-          placeholder="smoke, regression"
-          defaultValue={(defaults?.tags ?? []).join(", ")}
-        />
-      </div>
-
-      <div>
-        <button
-          type="button"
-          onClick={() => setShowAdvanced(!showAdvanced)}
-          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-4"
-        >
-          {showAdvanced ? "Hide advanced options" : "Advanced options"}
-        </button>
-      </div>
-
-      {showAdvanced && (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="tc-priority">Priority</Label>
-              <select
-                id="tc-priority"
-                name="priority"
-                defaultValue={defaults?.priority ?? "MEDIUM"}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="CRITICAL">Critical</option>
-                <option value="HIGH">High</option>
-                <option value="MEDIUM">Medium</option>
-                <option value="LOW">Low</option>
-              </select>
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="tc-status">Status</Label>
-              <select
-                id="tc-status"
-                name="status"
-                defaultValue={defaults?.status ?? "ACTIVE"}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <option value="ACTIVE">Active</option>
-                <option value="DRAFT">Draft</option>
-                <option value="DEPRECATED">Deprecated</option>
-              </select>
-            </div>
-          </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="tc-priority" className="rd-label">priority</label>
+          <select id="tc-priority" name="priority" defaultValue={defaults?.priority ?? "MEDIUM"} className={RD_SELECT}>
+            <option value="CRITICAL">Critical</option>
+            <option value="HIGH">High</option>
+            <option value="MEDIUM">Medium</option>
+            <option value="LOW">Low</option>
+          </select>
         </div>
-      )}
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="tc-status" className="rd-label">status</label>
+          <select id="tc-status" name="status" defaultValue={defaults?.status ?? "ACTIVE"} className={RD_SELECT}>
+            <option value="ACTIVE">Active</option>
+            <option value="DRAFT">Draft</option>
+            <option value="DEPRECATED">Deprecated</option>
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="tc-tags" className="rd-label">tags</label>
+          <input
+            id="tc-tags"
+            name="tags"
+            type="text"
+            placeholder="smoke, auth"
+            defaultValue={(defaults?.tags ?? []).join(", ")}
+            className={RD_INPUT}
+          />
+        </div>
+      </div>
+
+      <p className="rd-mono text-[11px] text-[var(--rd-faint)]">
+        {readOnlyDisplayId
+          ? `Case ID ${readOnlyDisplayId}. ⌘↵ to save, esc to close.`
+          : `ID auto-generates like ${prefixPreview}-0001 on save. ⌘↵ to save, esc to close.`}
+      </p>
     </>
   );
 }
@@ -359,18 +376,17 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
   const router = useRouter();
 
   // ── Create dialog ────────────────────────────────────────────────────────────
+  const [activeTab, setActiveTab] = useState<"cases" | "suites" | "run" | "history">("cases");
+
+  // ── Create / edit slide-over ─────────────────────────────────────────────────
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [creatingCase, setCreatingCase] = useState(false);
-  const [createShowAdvanced, setCreateShowAdvanced] = useState(false);
-
-  // ── Edit dialog ──────────────────────────────────────────────────────────────
   const [editTarget, setEditTarget] = useState<TestCaseItem | null>(null);
-  const [editShowAdvanced, setEditShowAdvanced] = useState(false);
   const [savingEdit, setSavingEdit] = useState(false);
 
-  // ── Delete confirm ───────────────────────────────────────────────────────────
-  const [deleteTarget, setDeleteTarget] = useState<TestCaseItem | null>(null);
-  const [deletingCase, setDeletingCase] = useState(false);
+  // ── Inline delete confirm ────────────────────────────────────────────────────
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   // ── Bulk selection ───────────────────────────────────────────────────────────
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -400,7 +416,7 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
   const [selectedCases, setSelectedCases] = useState<string[]>([]);
   const [selectedSuiteId, setSelectedSuiteId] = useState<string | null>(null);
   const [runCaseSearch, setRunCaseSearch] = useState("");
-  const [runCaseTagFilter, setRunCaseTagFilter] = useState<string[]>([]);
+  const [runCaseTagFilter] = useState<string[]>([]);
   const [runName, setRunName] = useState(`Manual Run ${new Date().toLocaleDateString()}`);
   const [creatingRun, setCreatingRun] = useState(false);
   const [completingRun, setCompletingRun] = useState(false);
@@ -568,7 +584,6 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
       toast.success("Test case created.", { id: toastId });
       form.reset();
-      setCreateShowAdvanced(false);
       setShowCreateDialog(false);
       router.refresh();
     } catch {
@@ -582,7 +597,6 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
   async function openEdit(tc: TestCaseItem) {
     setEditTarget(tc);
-    setEditShowAdvanced(false);
   }
 
   // ─── Save edit ───────────────────────────────────────────────────────────────
@@ -621,24 +635,23 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
   // ─── Delete ──────────────────────────────────────────────────────────────────
 
-  async function confirmDelete() {
-    if (!deleteTarget) return;
-    setDeletingCase(true);
+  async function performDelete(tc: TestCaseItem) {
+    setDeletingId(tc.id);
 
     try {
-      const response = await fetch(`/api/test-cases/${deleteTarget.id}`, { method: "DELETE" });
+      const response = await fetch(`/api/test-cases/${tc.id}`, { method: "DELETE" });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };
         toast.error(body.error ?? "Unable to delete test case.");
         return;
       }
       toast.success("Test case deleted.");
-      setDeleteTarget(null);
+      setConfirmDeleteId(null);
       router.refresh();
     } catch {
       toast.error("Network error.");
     } finally {
-      setDeletingCase(false);
+      setDeletingId(null);
     }
   }
 
@@ -1085,89 +1098,70 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
 
   return (
     <>
-      {/* ── Create test case dialog ── */}
-      <Dialog
-        open={showCreateDialog}
-        onOpenChange={(open) => {
-          setShowCreateDialog(open);
-          if (!open) {
-            setCreateShowAdvanced(false);
-          }
-        }}
-      >
-        <DialogContent className="flex max-h-[min(90dvh,48rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-4">
-            <DialogTitle>New test case</DialogTitle>
-            <DialogDescription>Add a new test case to this project.</DialogDescription>
-          </DialogHeader>
-          <form className="flex min-h-0 flex-1 flex-col" onSubmit={createTestCase}>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <CaseFormFields
-                showAdvanced={createShowAdvanced}
-                setShowAdvanced={setCreateShowAdvanced}
-                testCasePrefix={testCasePrefix}
-              />
+      {/* ── Slide-over: new / edit test case ── */}
+      {(showCreateDialog || editTarget) && (
+        <>
+          <div
+            onClick={() => { setShowCreateDialog(false); setEditTarget(null); }}
+            className="fixed inset-0 z-40"
+            style={{ background: "var(--rd-scrim)" }}
+          />
+          <div
+            className="fixed inset-y-0 right-0 z-50 flex w-[440px] max-w-full flex-col border-l bg-[var(--rd-bg)] text-[var(--rd-text)]"
+            style={{ borderColor: "var(--rd-border2)", boxShadow: "-24px 0 64px -24px oklch(0 0 0 / 0.5)" }}
+          >
+            <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-[var(--rd-border)] px-5">
+              <div className="flex items-center gap-2.5">
+                <span className="rd-mono text-[11px] text-[var(--rd-accent)]">
+                  {editTarget ? editTarget.displayId : `${(testCasePrefix || "TC").toUpperCase()}-????`}
+                </span>
+                <h2 className="text-sm font-semibold">{editTarget ? "Edit test case" : "New test case"}</h2>
+              </div>
+              <button
+                type="button"
+                title="Close"
+                onClick={() => { setShowCreateDialog(false); setEditTarget(null); }}
+                className="rounded p-1 leading-none text-[var(--rd-faint)] transition-colors hover:text-[var(--rd-text)]"
+              >
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-4 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => setShowCreateDialog(false)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={creatingCase} className="w-full sm:w-auto">
-                {creatingCase ? "Saving…" : "Create test case"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Edit test case dialog ── */}
-      <Dialog open={!!editTarget} onOpenChange={(open) => { if (!open) setEditTarget(null); }}>
-        <DialogContent className="flex max-h-[min(90dvh,48rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
-          <DialogHeader className="shrink-0 border-b border-border px-4 pt-4 pb-4">
-            <DialogTitle>Edit test case</DialogTitle>
-            <DialogDescription>Update the test case details.</DialogDescription>
-          </DialogHeader>
-          <form key={editTarget?.id} className="flex min-h-0 flex-1 flex-col" onSubmit={saveEdit}>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
-              <CaseFormFields
-                showAdvanced={editShowAdvanced}
-                setShowAdvanced={setEditShowAdvanced}
-                defaults={editTarget ?? undefined}
-                testCasePrefix={testCasePrefix}
-                readOnlyDisplayId={editTarget?.displayId}
-              />
-            </div>
-            <div className="flex shrink-0 flex-col-reverse gap-2 border-t border-border px-4 pt-3 pb-4 sm:flex-row sm:justify-end">
-              <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={savingEdit} className="w-full sm:w-auto">
-                {savingEdit ? "Saving…" : "Save changes"}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* ── Delete confirm dialog ── */}
-      <Dialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
-        <DialogContent className="max-w-[min(95vw,28rem)]">
-          <DialogHeader>
-            <DialogTitle>Delete test case?</DialogTitle>
-            <DialogDescription>
-              &ldquo;{deleteTarget?.title}&rdquo; will be permanently deleted. Historical run data remains untouched.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
-            <Button type="button" variant="outline" className="w-full sm:w-auto" onClick={() => setDeleteTarget(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" className="w-full sm:w-auto" disabled={deletingCase} onClick={confirmDelete}>
-              {deletingCase ? "Deleting…" : "Delete"}
-            </Button>
+            <form
+              key={editTarget?.id ?? "new"}
+              className="flex min-h-0 flex-1 flex-col"
+              onSubmit={editTarget ? saveEdit : createTestCase}
+            >
+              <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-5">
+                <CaseFormFields
+                  defaults={editTarget ?? undefined}
+                  testCasePrefix={testCasePrefix}
+                  readOnlyDisplayId={editTarget?.displayId}
+                />
+              </div>
+              <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--rd-border)] px-5 py-3.5">
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateDialog(false); setEditTarget(null); }}
+                  className="h-8 rounded-md border border-[var(--rd-border)] px-3.5 text-[12.5px] font-medium text-[var(--rd-text)] transition-colors hover:border-[var(--rd-border2)]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={editTarget ? savingEdit : creatingCase}
+                  className="h-8 rounded-md bg-[var(--rd-accent)] px-3.5 text-[12.5px] font-semibold text-[var(--rd-on-accent)] transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {editTarget
+                    ? savingEdit ? "Saving…" : "Save changes"
+                    : creatingCase ? "Saving…" : "Create test case"}
+                </button>
+              </div>
+            </form>
           </div>
-        </DialogContent>
-      </Dialog>
+        </>
+      )}
 
       {/* ── Bulk delete confirm dialog ── */}
       <Dialog open={showBulkDeleteDialog} onOpenChange={(open) => { if (!open && !bulkDeleting) setShowBulkDeleteDialog(false); }}>
@@ -1630,92 +1624,150 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
         </DialogContent>
       </Dialog>
 
-      {/* ── Page header ── */}
-      <header className="flex items-center justify-between gap-4 mb-8">
-        <div>
-          <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">Test suite</p>
-          <h1 className="text-2xl font-semibold mt-0.5">Test Cases</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {testCases.length === 0
-              ? "No test cases yet — create your first one."
-              : `${testCases.length} case${testCases.length !== 1 ? "s" : ""} in this project.`}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => setShowImportDialog(true)}>
+      {/* ── Sticky header ── */}
+      <header
+        className="sticky top-0 z-10 flex h-[52px] items-center justify-between border-b border-[var(--rd-border)] bg-[var(--rd-bg)] px-6"
+      >
+        <p className="rd-mono text-[12px] text-[var(--rd-muted)]">
+          <span className="text-[var(--rd-faint)]">{(testCasePrefix || "TC").toLowerCase()} /</span> tests
+        </p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowImportDialog(true)}
+            className="h-[30px] rounded-md border border-[var(--rd-border)] bg-[var(--rd-panel)] px-3 text-[12.5px] font-medium text-[var(--rd-text)] transition-colors hover:border-[var(--rd-border2)]"
+          >
             Import
-          </Button>
-          <Button onClick={() => setShowCreateDialog(true)}>
-            <svg className="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2} aria-hidden="true">
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCreateDialog(true)}
+            className="inline-flex h-[30px] items-center gap-1.5 rounded-md bg-[var(--rd-accent)] px-3 text-[12.5px] font-semibold text-[var(--rd-on-accent)] transition-opacity hover:opacity-90"
+          >
+            <svg className="h-[13px] w-[13px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
             </svg>
             New test case
-          </Button>
+          </button>
         </div>
       </header>
 
-      {/* ── Tabs ── */}
-      <Tabs defaultValue="cases">
-        <TabsList className="mb-6">
-          <TabsTrigger value="cases">
-            All cases
-            {testCases.length > 0 && (
-              <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
-                {testCases.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="suites">
-            Suites
-            {suites.length > 0 && (
-              <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
-                {suites.length}
-              </span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="run">
-            Manual run
-            {activeManualRun && (
-              <span className="ml-2 inline-flex h-2 w-2 rounded-full bg-[var(--warning)]" aria-label="Active run" />
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="history">
-            History
-            {completedRuns.length > 0 && (
-              <span className="ml-2 rounded-full bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground">
-                {completedRuns.length}
-              </span>
-            )}
-          </TabsTrigger>
-        </TabsList>
+      {/* ── Main ── */}
+      <main className="flex flex-col gap-4 p-6">
+        <div>
+          <h1 className="text-[20px] font-semibold tracking-[-0.02em]">Test cases</h1>
+          <p className="mt-0.5 text-[13px] text-[var(--rd-muted)]">
+            {testCases.length} case{testCases.length !== 1 ? "s" : ""} · {suites.length} suite{suites.length !== 1 ? "s" : ""} · {completedRuns.length} completed run{completedRuns.length !== 1 ? "s" : ""}
+          </p>
+        </div>
 
-        {/* ── All cases tab ── */}
-        <TabsContent value="cases">
-          <div className="space-y-4">
-            <div className="flex items-center gap-3">
-              <Input
-                type="search"
-                placeholder="Search by title or module…"
-                value={caseSearch}
-                onChange={(e) => setCaseSearch(e.target.value)}
-                className="max-w-sm"
-              />
-              {selectedIds.size > 0 && (
-                <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-1.5 text-sm">
-                  <span className="font-medium text-destructive">{selectedIds.size} selected</span>
-                  <Button
-                    size="sm"
-                    variant="destructive"
-                    className="h-7 px-2.5 text-xs"
-                    onClick={() => setShowBulkDeleteDialog(true)}
+        {/* Tabs */}
+        <div className="flex gap-0.5 border-b border-[var(--rd-border)]">
+          {([
+            { id: "cases", label: "cases", count: testCases.length },
+            { id: "suites", label: "suites", count: suites.length },
+            { id: "run", label: "manual-run", dot: !!activeManualRun },
+            { id: "history", label: "history", count: completedRuns.length },
+          ] as const).map((tab) => {
+            const active = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className="rd-mono inline-flex items-center gap-1.5 px-3.5 py-2 text-[12px] transition-colors"
+                style={{
+                  color: active ? "var(--rd-text)" : "var(--rd-muted)",
+                  boxShadow: active ? "inset 0 -2px 0 var(--rd-accent)" : "none",
+                }}
+              >
+                {tab.label}
+                {"count" in tab && tab.count != null && (
+                  <span className="text-[10px] text-[var(--rd-faint)]">{tab.count}</span>
+                )}
+                {"dot" in tab && tab.dot && (
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: "var(--rd-warn)" }} />
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* ── Cases tab ── */}
+        {activeTab === "cases" && (
+          <div className="flex flex-col gap-3">
+            {/* Filter row */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex w-[280px] items-center gap-2 rounded-md border border-[var(--rd-border)] bg-[var(--rd-panel)] px-2.5 py-1.5">
+                <svg className="h-[13px] w-[13px] text-[var(--rd-faint)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  value={caseSearch}
+                  onChange={(e) => setCaseSearch(e.target.value)}
+                  placeholder="Filter by title, ID, tag, jira…"
+                  className="flex-1 border-none bg-transparent p-0 text-[12.5px] text-[var(--rd-text)] outline-none"
+                />
+              </div>
+              {distinctTags.map((tag) => {
+                const on = caseTagFilter.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() =>
+                      setCaseTagFilter((cur) => (on ? cur.filter((t) => t !== tag) : [...cur, tag]))
+                    }
+                    className="rd-mono rounded-full px-2.5 py-[3px] text-[11px] transition-colors"
+                    style={{
+                      border: `1px solid ${on ? "var(--rd-accent)" : "var(--rd-border)"}`,
+                      background: on ? "var(--rd-accent-soft)" : "transparent",
+                      color: on ? "var(--rd-accent)" : "var(--rd-muted)",
+                    }}
                   >
-                    Delete selected
-                  </Button>
+                    #{tag}
+                  </button>
+                );
+              })}
+              {testCases.some((tc) => tc.importBatchId) && (
+                <button
+                  type="button"
+                  onClick={() => setShowImportedOnly((v) => !v)}
+                  className="rd-mono rounded-full px-2.5 py-[3px] text-[11px] transition-colors"
+                  style={{
+                    border: `1px solid ${showImportedOnly ? "var(--rd-warn)" : "var(--rd-border)"}`,
+                    background: showImportedOnly ? "var(--rd-warn-soft)" : "transparent",
+                    color: showImportedOnly ? "var(--rd-warn)" : "var(--rd-muted)",
+                  }}
+                >
+                  imported
+                </button>
+              )}
+              {(caseSearch || caseTagFilter.length > 0 || showImportedOnly) && (
+                <button
+                  type="button"
+                  onClick={() => { setCaseSearch(""); setCaseTagFilter([]); setShowImportedOnly(false); }}
+                  className="rd-mono text-[11px] text-[var(--rd-faint)] underline underline-offset-2 hover:text-[var(--rd-text)]"
+                >
+                  clear
+                </button>
+              )}
+              {selectedIds.size > 0 && (
+                <div className="ml-auto flex items-center gap-2">
+                  <span className="rd-mono text-[11px] text-[var(--rd-muted)]">{selectedIds.size} selected</span>
+                  <button
+                    type="button"
+                    onClick={() => setShowBulkDeleteDialog(true)}
+                    className="rd-mono rounded-md px-2.5 py-1 text-[11px] font-medium text-[oklch(0.99_0_0)]"
+                    style={{ background: "var(--rd-fail)" }}
+                  >
+                    delete selected
+                  </button>
                   <button
                     type="button"
                     onClick={() => setSelectedIds(new Set())}
-                    className="ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
                     title="Clear selection"
+                    className="rounded p-0.5 text-[var(--rd-faint)] hover:text-[var(--rd-text)]"
                   >
                     <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -1725,602 +1777,362 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
               )}
             </div>
 
-            {/* ── Tag + imported-only filter chips ── */}
-            {(distinctTags.length > 0 || testCases.some((tc) => tc.importBatchId)) && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {distinctTags.map((tag) => {
-                  const active = caseTagFilter.includes(tag);
-                  return (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() =>
-                        setCaseTagFilter((cur) =>
-                          active ? cur.filter((t) => t !== tag) : [...cur, tag]
-                        )
-                      }
-                      className={cn(
-                        "rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
-                        active
-                          ? "bg-primary text-primary-foreground"
-                          : "bg-muted text-muted-foreground hover:bg-muted/80"
-                      )}
-                    >
-                      #{tag}
-                    </button>
-                  );
-                })}
-                {testCases.some((tc) => tc.importBatchId) && (
-                  <button
-                    type="button"
-                    onClick={() => setShowImportedOnly((v) => !v)}
-                    className={cn(
-                      "rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
-                      showImportedOnly
-                        ? "bg-amber-500 text-white"
-                        : "bg-muted text-muted-foreground hover:bg-muted/80"
-                    )}
-                  >
-                    📥 Imported only
-                  </button>
-                )}
-                {(caseSearch || caseTagFilter.length > 0 || showImportedOnly) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCaseSearch("");
-                      setCaseTagFilter([]);
-                      setShowImportedOnly(false);
-                    }}
-                    className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                  >
-                    Clear filters
-                  </button>
-                )}
+            {/* Import banners */}
+            {importBatches.map((batch) => (
+              <div
+                key={batch.id}
+                className="flex items-center gap-3 rounded-[7px] px-3.5 py-2"
+                style={{ border: "1px solid var(--rd-warn)", background: "var(--rd-warn-soft)" }}
+              >
+                <span className="rd-mono text-[11px]" style={{ color: "var(--rd-warn)" }}>IMPORT</span>
+                <span className="flex-1 text-[12.5px] text-[var(--rd-text)]">
+                  <strong>{batch.caseCount} case{batch.caseCount !== 1 ? "s" : ""}</strong> from {batch.filename}
+                </span>
+                <button type="button" onClick={() => undoBatch(batch.id)} className="rd-mono text-[11px] underline underline-offset-[3px]" style={{ color: "var(--rd-warn)" }}>undo</button>
+                <button type="button" onClick={() => selectBatchCases(batch.id)} className="rd-mono text-[11px] underline underline-offset-[3px]" style={{ color: "var(--rd-warn)" }}>select</button>
+                <button type="button" onClick={() => dismissBatch(batch.id)} title="Dismiss" className="p-0.5 leading-none" style={{ color: "var(--rd-warn)" }}>
+                  <svg className="h-[13px] w-[13px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
               </div>
-            )}
+            ))}
 
-            {/* ── Import batch banners ── */}
-            {importBatches.length > 0 && (
-              <div className="space-y-2">
-                {importBatches.map((batch) => (
-                  <div
-                    key={batch.id}
-                    className="flex items-center gap-3 rounded-lg border border-amber-200 border-l-4 border-l-amber-400 bg-amber-50/60 dark:border-amber-800 dark:border-l-amber-500 dark:bg-amber-900/20 px-4 py-2.5"
-                  >
-                    <div className="flex-1 min-w-0 text-sm text-amber-800 dark:text-amber-200">
-                      <span className="font-medium">{batch.caseCount}</span> case{batch.caseCount !== 1 ? "s" : ""} imported from{" "}
-                      <span className="font-semibold">{batch.filename}</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => undoBatch(batch.id)}
-                      className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100"
-                    >
-                      Undo all
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => selectBatchCases(batch.id)}
-                      className="shrink-0 text-xs font-medium text-amber-700 dark:text-amber-300 underline underline-offset-2 hover:text-amber-900 dark:hover:text-amber-100"
-                    >
-                      Select imported
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => dismissBatch(batch.id)}
-                      className="shrink-0 rounded p-0.5 text-amber-500 hover:text-amber-700 dark:hover:text-amber-300 transition-colors"
-                      title="Dismiss"
-                    >
-                      <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                      </svg>
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-
+            {/* Table / empty */}
             {filteredCases.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
+              <div className="rounded-lg border border-dashed border-[var(--rd-border)] bg-[var(--rd-panel)] p-10 text-center">
                 {testCases.length === 0 ? (
                   <>
-                    <p className="text-sm font-medium">No test cases yet</p>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      Create your first test case or import from a file.
-                    </p>
+                    <p className="text-[13px] font-medium">No test cases yet</p>
+                    <p className="mt-1 text-[13px] text-[var(--rd-muted)]">Create your first test case or import from a file.</p>
                     <div className="mt-4 flex justify-center gap-2">
-                      <Button variant="outline" onClick={() => setShowImportDialog(true)}>Import</Button>
-                      <Button onClick={() => setShowCreateDialog(true)}>New test case</Button>
+                      <button type="button" onClick={() => setShowImportDialog(true)} className="h-8 rounded-md border border-[var(--rd-border)] px-3 text-[12.5px] font-medium hover:border-[var(--rd-border2)]">Import</button>
+                      <button type="button" onClick={() => setShowCreateDialog(true)} className="h-8 rounded-md px-3 text-[12.5px] font-semibold text-[var(--rd-on-accent)]" style={{ background: "var(--rd-accent)" }}>New test case</button>
                     </div>
                   </>
                 ) : (
-                  <p className="text-sm text-muted-foreground">No test cases match your search.</p>
+                  <p className="text-[13px] text-[var(--rd-muted)]">No test cases match your search.</p>
                 )}
               </div>
             ) : (
-              <div className="rounded-xl border border-border overflow-hidden">
-                <table className="w-full text-sm">
+              <div className="overflow-hidden rounded-lg border border-[var(--rd-border)] bg-[var(--rd-panel)]">
+                <table className="w-full border-collapse text-[13px]">
                   <thead>
-                    <tr className="border-b border-border bg-muted/40">
-                      <th className="w-10 px-3 py-2.5">
+                    <tr>
+                      <th className="w-9 border-b border-[var(--rd-border)] px-3 py-2">
                         <input
                           type="checkbox"
-                          className="rounded border-border"
-                          checked={filteredCases.length > 0 && filteredCases.every((tc) => selectedIds.has(tc.id))}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedIds(new Set(filteredCases.map((tc) => tc.id)));
-                            } else {
-                              setSelectedIds(new Set());
-                            }
-                          }}
                           aria-label="Select all"
+                          checked={filteredCases.length > 0 && filteredCases.every((tc) => selectedIds.has(tc.id))}
+                          onChange={(e) =>
+                            setSelectedIds(e.target.checked ? new Set(filteredCases.map((tc) => tc.id)) : new Set())
+                          }
                         />
                       </th>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Case ID</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Title</th>
-                      <th className="hidden px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground sm:table-cell">Module</th>
-                      <th className="hidden px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground md:table-cell">Jira</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Priority</th>
-                      <th className="hidden px-4 py-2.5 text-left text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground md:table-cell">Status</th>
-                      <th className="px-4 py-2.5 text-right text-xs font-medium uppercase tracking-[0.12em] text-muted-foreground">Actions</th>
+                      {["id", "title", "module", "jira", "priority", "status"].map((h) => (
+                        <th key={h} className="rd-mono border-b border-[var(--rd-border)] px-3 py-2 text-left text-[10px] font-medium uppercase tracking-[0.12em] text-[var(--rd-faint)]">{h}</th>
+                      ))}
+                      <th className="w-[130px] border-b border-[var(--rd-border)] px-3 py-2" />
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-border bg-card">
-                    {filteredCases.map((tc) => (
-                      <tr
-                        key={tc.id}
-                        className={cn(
-                          "hover:bg-muted/30 transition-colors",
-                          selectedIds.has(tc.id) && "bg-muted/20",
-                          tc.importBatchId && "[box-shadow:inset_4px_0_0_#f59e0b]"
-                        )}
-                      >
-                        <td className="w-10 px-3 py-3">
-                          <input
-                            type="checkbox"
-                            className="rounded border-border"
-                            checked={selectedIds.has(tc.id)}
-                            onChange={(e) => {
-                              const next = new Set(selectedIds);
-                              if (e.target.checked) next.add(tc.id);
-                              else next.delete(tc.id);
-                              setSelectedIds(next);
-                            }}
-                            aria-label={`Select ${tc.displayId}`}
-                          />
-                        </td>
-                        <td className="px-4 py-3 font-semibold tabular-nums">{tc.displayId}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{tc.title}</span>
-                            {tc.importBatchId && (
-                              <span className="inline-flex items-center rounded-full bg-amber-100 dark:bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-300">
-                                Imported
+                  <tbody>
+                    {filteredCases.map((tc) => {
+                      const confirming = confirmDeleteId === tc.id;
+                      return (
+                        <tr
+                          key={tc.id}
+                          className="transition-colors hover:bg-[var(--rd-panel2)]"
+                          style={{ boxShadow: tc.importBatchId ? "inset 2px 0 0 var(--rd-warn)" : "none" }}
+                        >
+                          <td className="border-b border-[var(--rd-border)] px-3 py-2.5">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select ${tc.displayId}`}
+                              checked={selectedIds.has(tc.id)}
+                              onChange={(e) => {
+                                const next = new Set(selectedIds);
+                                if (e.target.checked) next.add(tc.id); else next.delete(tc.id);
+                                setSelectedIds(next);
+                              }}
+                            />
+                          </td>
+                          <td className="rd-mono whitespace-nowrap border-b border-[var(--rd-border)] px-3 py-2.5 text-[12px]" style={{ color: "var(--rd-accent)" }}>{tc.displayId}</td>
+                          <td className="border-b border-[var(--rd-border)] px-3 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">{tc.title}</span>
+                              {tc.importBatchId && (
+                                <span className="rd-mono rounded-[3px] px-1.5 py-px text-[9px] tracking-[0.08em]" style={{ background: "var(--rd-warn-soft)", color: "var(--rd-warn)" }}>IMPORTED</span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="border-b border-[var(--rd-border)] px-3 py-2.5">
+                            <span className="rd-mono text-[11px] text-[var(--rd-muted)]">{tc.module ?? "—"}</span>
+                          </td>
+                          <td className="rd-mono border-b border-[var(--rd-border)] px-3 py-2.5 text-[11px] text-[var(--rd-muted)]">{tc.jiraKey ?? "—"}</td>
+                          <td className="border-b border-[var(--rd-border)] px-3 py-2.5"><PrioPill priority={tc.priority} /></td>
+                          <td className="border-b border-[var(--rd-border)] px-3 py-2.5">
+                            <span className="inline-flex items-center gap-1.5">
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: RD_STATUS_DOT[tc.status] ?? "var(--rd-faint)" }} />
+                              <span className="text-[12px] capitalize text-[var(--rd-muted)]">{tc.status.toLowerCase()}</span>
+                            </span>
+                          </td>
+                          <td className="border-b border-[var(--rd-border)] px-3 py-2.5 text-right">
+                            {confirming ? (
+                              <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+                                <button
+                                  type="button"
+                                  disabled={deletingId === tc.id}
+                                  onClick={() => performDelete(tc)}
+                                  className="rd-mono rounded px-2 py-[3px] text-[10px] text-[oklch(0.99_0_0)] disabled:opacity-60"
+                                  style={{ background: "var(--rd-fail)" }}
+                                >
+                                  {deletingId === tc.id ? "…" : "sure?"}
+                                </button>
+                                <button type="button" onClick={() => setConfirmDeleteId(null)} className="rd-mono text-[10px] text-[var(--rd-muted)]">esc</button>
+                              </span>
+                            ) : (
+                              <span className="inline-flex gap-0.5">
+                                <button type="button" title="Edit" onClick={() => openEdit(tc)} className="rounded p-1 leading-none text-[var(--rd-faint)] transition-colors hover:bg-[var(--rd-panel2)] hover:text-[var(--rd-text)]">
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                  </svg>
+                                </button>
+                                <button type="button" title="Delete" onClick={() => setConfirmDeleteId(tc.id)} className="rounded p-1 leading-none text-[var(--rd-faint)] transition-colors hover:bg-[var(--rd-fail-soft)] hover:text-[var(--rd-fail)]">
+                                  <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                  </svg>
+                                </button>
                               </span>
                             )}
-                          </div>
-                          {tc.description && (
-                            <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{tc.description}</p>
-                          )}
-                        </td>
-                        <td className="hidden px-4 py-3 sm:table-cell">
-                          {tc.module ? (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{tc.module}</span>
-                          ) : (
-                            <span className="text-muted-foreground/40">—</span>
-                          )}
-                        </td>
-                        <td className="hidden px-4 py-3 text-sm text-muted-foreground md:table-cell">
-                          {tc.jiraKey ? <span className="font-medium">{tc.jiraKey}</span> : <span className="text-muted-foreground/40">—</span>}
-                        </td>
-                        <td className="px-4 py-3">
-                          <Badge variant={PRIORITY_VARIANT[tc.priority] ?? "outline"} className="text-xs">
-                            {tc.priority}
-                          </Badge>
-                        </td>
-                        <td className="hidden px-4 py-3 md:table-cell">
-                          <span className="flex items-center gap-1.5">
-                            <span className={`h-1.5 w-1.5 rounded-full ${CASE_STATUS_DOT[tc.status] ?? "bg-muted-foreground"}`} />
-                            <span className="text-xs capitalize text-muted-foreground">{tc.status.toLowerCase()}</span>
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-right">
-                          <div className="flex justify-end gap-1">
-                            <button
-                              type="button"
-                              onClick={() => openEdit(tc)}
-                              className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              title="Edit"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setDeleteTarget(tc)}
-                              className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                              title="Delete"
-                            >
-                              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                              </svg>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             )}
           </div>
-        </TabsContent>
+        )}
 
         {/* ── Suites tab ── */}
-        <TabsContent value="suites">
-          <div className="space-y-4">
+        {activeTab === "suites" && (
+          <div className="flex flex-col gap-2.5">
             <div className="flex justify-end">
-              <Button onClick={() => setShowCreateSuiteDialog(true)} disabled={testCases.length === 0}>
-                <svg className="mr-1.5 h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <button
+                type="button"
+                onClick={() => setShowCreateSuiteDialog(true)}
+                disabled={testCases.length === 0}
+                className="inline-flex h-[30px] items-center gap-1.5 rounded-md px-3 text-[12.5px] font-semibold text-[var(--rd-on-accent)] disabled:opacity-50"
+                style={{ background: "var(--rd-accent)" }}
+              >
+                <svg className="h-[13px] w-[13px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
                 New suite
-              </Button>
+              </button>
             </div>
-
             {suites.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
-                <p className="text-sm font-medium">No test suites yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Group test cases together into suites for organised runs.
-                </p>
-                {testCases.length > 0 && (
-                  <Button className="mt-4" onClick={() => setShowCreateSuiteDialog(true)}>
-                    New suite
-                  </Button>
-                )}
+              <div className="rounded-lg border border-dashed border-[var(--rd-border)] bg-[var(--rd-panel)] p-10 text-center">
+                <p className="text-[13px] font-medium">No test suites yet</p>
+                <p className="mt-1 text-[13px] text-[var(--rd-muted)]">Group test cases together into suites for organised runs.</p>
               </div>
             ) : (
-              <div className="space-y-3">
-                {suites.map((suite) => (
-                  <div key={suite.id} className="rounded-xl border border-border overflow-hidden">
+              suites.map((suite) => {
+                const expanded = expandedSuite === suite.id;
+                return (
+                  <div key={suite.id} className="overflow-hidden rounded-lg border border-[var(--rd-border)] bg-[var(--rd-panel)]">
                     <div
-                      className="flex items-center justify-between px-4 py-3 bg-muted/30 cursor-pointer hover:bg-muted/50 transition-colors"
-                      onClick={() => setExpandedSuite(expandedSuite === suite.id ? null : suite.id)}
+                      onClick={() => setExpandedSuite(expanded ? null : suite.id)}
+                      className="flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-[var(--rd-panel2)]"
                     >
-                      <div className="flex items-center gap-3">
-                        <svg
-                          className={`h-4 w-4 text-muted-foreground transition-transform ${expandedSuite === suite.id ? "rotate-90" : ""}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
-                        >
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      <svg
+                        className="h-3.5 w-3.5 text-[var(--rd-faint)] transition-transform"
+                        style={{ transform: expanded ? "rotate(90deg)" : "rotate(0deg)" }}
+                        fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                      <div className="flex-1">
+                        <p className="text-[13.5px] font-semibold">{suite.name}</p>
+                        {suite.description && <p className="mt-px text-[12px] text-[var(--rd-muted)]">{suite.description}</p>}
+                      </div>
+                      <span className="rd-mono text-[11px] text-[var(--rd-faint)]">{suite.cases.length} case{suite.cases.length !== 1 ? "s" : ""}</span>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openManageSuiteDialog(suite); }}
+                        className="h-[26px] rounded-[5px] border border-[var(--rd-border)] px-2.5 text-[12px] font-medium transition-colors hover:border-[var(--rd-border2)]"
+                      >
+                        Manage
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); deleteSuite(suite.id); }}
+                        disabled={deletingSuiteId === suite.id}
+                        title="Delete suite"
+                        className="rounded p-1 leading-none text-[var(--rd-faint)] transition-colors hover:bg-[var(--rd-fail-soft)] hover:text-[var(--rd-fail)]"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
-                        <div>
-                          <p className="font-medium text-sm">{suite.name}</p>
-                          {suite.description && (
-                            <p className="text-xs text-muted-foreground">{suite.description}</p>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground">
-                          {suite.cases.length} case{suite.cases.length !== 1 ? "s" : ""}
-                        </span>
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="secondary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openManageSuiteDialog(suite);
-                          }}
-                        >
-                          Manage cases
-                        </Button>
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); deleteSuite(suite.id); }}
-                          disabled={deletingSuiteId === suite.id}
-                          className="rounded p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                          title="Delete suite"
-                        >
-                          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
-                      </div>
+                      </button>
                     </div>
-
-                    {expandedSuite === suite.id && (
-                      <div className="divide-y divide-border">
+                    {expanded && (
+                      <div className="border-t border-[var(--rd-border)]">
                         {suite.cases.length === 0 ? (
-                          <p className="px-4 py-3 text-sm text-muted-foreground">No cases in this suite.</p>
+                          <p className="px-4 py-3 text-[13px] text-[var(--rd-muted)]">No cases in this suite.</p>
                         ) : (
                           suite.cases.map((sc) => (
-                            <div key={sc.id} className="flex items-center gap-3 px-4 py-2.5 bg-card hover:bg-muted/20 transition-colors">
-                              <div className="flex-1">
-                                <p className="text-sm font-medium">{sc.testCase.title}</p>
-                                <p className="text-xs text-muted-foreground">
-                                  {sc.testCase.displayId}
-                                  {sc.testCase.jiraKey ? ` · ${sc.testCase.jiraKey}` : ""}
-                                </p>
-                              </div>
-                              {sc.testCase.module && (
-                                <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                                  {sc.testCase.module.name}
-                                </span>
-                              )}
-                              <Badge variant={PRIORITY_VARIANT[sc.testCase.priority] ?? "outline"} className="text-xs">
-                                {sc.testCase.priority}
-                              </Badge>
+                            <div key={sc.id} className="flex items-center gap-3 border-b border-[var(--rd-border)] py-2.5 pl-[42px] pr-4">
+                              <span className="rd-mono text-[11px]" style={{ color: "var(--rd-accent)" }}>{sc.testCase.displayId}</span>
+                              <span className="flex-1 text-[13px]">{sc.testCase.title}</span>
+                              {sc.testCase.module && <span className="rd-mono text-[11px] text-[var(--rd-muted)]">{sc.testCase.module.name}</span>}
+                              <PrioPill priority={sc.testCase.priority} />
                             </div>
                           ))
                         )}
                       </div>
                     )}
                   </div>
-                ))}
-              </div>
+                );
+              })
             )}
           </div>
-        </TabsContent>
+        )}
 
         {/* ── Manual run tab ── */}
-        <TabsContent value="run">
-          <div className="space-y-6">
-            {/* Active run banner */}
+        {activeTab === "run" && (
+          <div className="flex max-w-[720px] flex-col gap-5">
             {activeManualRun && (
-              <div className="flex items-center justify-between gap-4 rounded-xl border border-[var(--warning)] bg-[oklch(from_var(--warning)_l_c_h_/_0.08)] px-5 py-4">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-wider text-[var(--warning)]">
-                    Active run
-                  </p>
-                  <p className="mt-0.5 font-semibold">{activeManualRun.name}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">
-                    {activeManualRun.results.filter((r) => r.status !== "BLOCKED").length} of{" "}
-                    {activeManualRun.results.length} tested
+              <div className="flex items-center gap-4 rounded-lg px-4 py-3.5" style={{ border: "1px solid var(--rd-warn)", background: "var(--rd-warn-soft)" }}>
+                <span className="rd-mono text-[10px] tracking-[0.1em]" style={{ color: "var(--rd-warn)" }}>ACTIVE RUN</span>
+                <div className="flex-1">
+                  <p className="text-[13.5px] font-semibold">{activeManualRun.name}</p>
+                  <p className="rd-mono mt-px text-[11px] text-[var(--rd-muted)]">
+                    {activeManualRun.results.filter((r) => r.status !== "BLOCKED").length} / {activeManualRun.results.length} tested
                   </p>
                 </div>
-                <a href={`/dashboard/${projectId}/tests/run/${activeManualRun.id}`}>
-                  <Button>
-                    Continue testing
-                    <svg
-                      className="ml-1.5 h-4 w-4"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                      strokeWidth={2}
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                    </svg>
-                  </Button>
+                <a
+                  href={`/dashboard/${projectId}/tests/run/${activeManualRun.id}`}
+                  className="inline-flex h-[30px] items-center rounded-md px-3 text-[12.5px] font-semibold text-[var(--rd-on-accent)]"
+                  style={{ background: "var(--rd-accent)" }}
+                >
+                  Continue →
                 </a>
               </div>
             )}
-
-            {/* New run form */}
-            <div className="max-w-lg space-y-4">
-              {/* Suite picker */}
-              {suites.length > 0 && (
-                <div className="space-y-1.5">
-                  <Label>Start from suite</Label>
-                  <Select
+            <div className="flex flex-col gap-3.5 rounded-lg border border-[var(--rd-border)] bg-[var(--rd-panel)] p-4.5" style={{ padding: "18px" }}>
+              <h3 className="text-[13.5px] font-semibold">Start a new run</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="rd-label">from suite</label>
+                  <select
+                    className={RD_SELECT}
                     value={selectedSuiteId ?? "none"}
-                    onValueChange={(val) => {
-                      if (val === "none") {
-                        setSelectedSuiteId(null);
-                        setSelectedCases([]);
-                      } else {
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "none") { setSelectedSuiteId(null); setSelectedCases([]); }
+                      else {
                         setSelectedSuiteId(val);
-                        const suite = suites.find((s) => s.id === val);
-                        if (suite) setSelectedCases(suite.cases.map((c) => c.testCase.id));
+                        const s = suites.find((x) => x.id === val);
+                        if (s) setSelectedCases(s.cases.map((c) => c.testCase.id));
                       }
                     }}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a suite…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">— No suite —</SelectItem>
-                      {suites.map((s) => (
-                        <SelectItem key={s.id} value={s.id}>
-                          {s.name}{" "}
-                          <span className="text-muted-foreground">({s.cases.length})</span>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    Selecting a suite pre-fills the cases below — you can still adjust individually.
-                  </p>
+                    <option value="none">— none —</option>
+                    {suites.map((s) => (
+                      <option key={s.id} value={s.id}>{s.name} ({s.cases.length})</option>
+                    ))}
+                  </select>
                 </div>
-              )}
-
-              <div>
-                <h3 className="text-sm font-semibold">Select test cases</h3>
-                <p className="mt-0.5 text-xs text-muted-foreground">
-                  {testCases.length > 0
-                    ? `${testCases.length} available`
-                    : "No test cases yet — create some first."}
-                </p>
+                <div className="flex flex-col gap-1.5">
+                  <label className="rd-label">run name</label>
+                  <input value={runName} onChange={(e) => setRunName(e.target.value)} className={RD_INPUT} />
+                </div>
               </div>
-
               {testCases.length > 0 && (
-                <Input
-                  type="search"
-                  placeholder="Search…"
+                <input
                   value={runCaseSearch}
                   onChange={(e) => setRunCaseSearch(e.target.value)}
+                  placeholder="Filter cases…"
+                  className={RD_INPUT}
                 />
               )}
-
-              {distinctTags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {distinctTags.map((tag) => {
-                    const active = runCaseTagFilter.includes(tag);
+              <div className="max-h-[220px] overflow-auto rounded-md border border-[var(--rd-border)]">
+                {filteredRunCases.length === 0 ? (
+                  <p className="px-3 py-3 text-[13px] text-[var(--rd-muted)]">{testCases.length === 0 ? "No test cases yet." : "No matches."}</p>
+                ) : (
+                  filteredRunCases.map((tc) => {
+                    const on = selectedCases.includes(tc.id);
                     return (
-                      <button
-                        key={tag}
-                        type="button"
-                        onClick={() =>
-                          setRunCaseTagFilter((cur) =>
-                            active ? cur.filter((t) => t !== tag) : [...cur, tag]
-                          )
-                        }
-                        className={cn(
-                          "rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors",
-                          active
-                            ? "bg-primary text-primary-foreground"
-                            : "bg-muted text-muted-foreground hover:bg-muted/80"
-                        )}
-                      >
-                        #{tag}
-                      </button>
-                    );
-                  })}
-                  {(runCaseSearch || runCaseTagFilter.length > 0) && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setRunCaseSearch("");
-                        setRunCaseTagFilter([]);
-                      }}
-                      className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2"
-                    >
-                      Clear filters
-                    </button>
-                  )}
-                </div>
-              )}
-
-              <div className="relative max-h-56 overflow-auto rounded-lg border border-border">
-                <div className="space-y-0.5 p-2">
-                  {filteredRunCases.map((testCase) => {
-                    const selected = selectedCases.includes(testCase.id);
-                    return (
-                      <label
-                        key={testCase.id}
-                        className="flex cursor-pointer items-center gap-2 rounded-sm px-2 py-1.5 text-sm hover:bg-muted"
-                      >
+                      <label key={tc.id} className="flex cursor-pointer items-center gap-2.5 border-b border-[var(--rd-border)] px-3 py-2 text-[13px] transition-colors hover:bg-[var(--rd-panel2)]">
                         <input
                           type="checkbox"
-                          className="accent-primary"
-                          checked={selected}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setSelectedCases((cur) => [...cur, testCase.id]);
-                            } else {
-                              setSelectedCases((cur) => cur.filter((id) => id !== testCase.id));
-                            }
-                          }}
+                          checked={on}
+                          onChange={(e) =>
+                            setSelectedCases((cur) => (e.target.checked ? [...cur, tc.id] : cur.filter((id) => id !== tc.id)))
+                          }
                         />
-                        <span className="flex-1 truncate">{testCase.title}</span>
-                        <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-mono text-muted-foreground">
-                          {testCase.displayId}
-                        </span>
-                        <span className="flex shrink-0 items-center gap-1">
-                          {testCase.module && (
-                            <span className="rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-                              {testCase.module}
-                            </span>
-                          )}
-                          <Badge
-                            variant={PRIORITY_VARIANT[testCase.priority] ?? "outline"}
-                            className="px-1 py-0 text-xs"
-                          >
-                            {testCase.priority}
-                          </Badge>
-                        </span>
+                        <span className="rd-mono text-[11px]" style={{ color: "var(--rd-accent)" }}>{tc.displayId}</span>
+                        <span className="flex-1 truncate">{tc.title}</span>
+                        <PrioPill priority={tc.priority} />
                       </label>
                     );
-                  })}
-                  {filteredRunCases.length === 0 && (
-                    <p className="px-2 py-3 text-sm text-muted-foreground">
-                      {testCases.length === 0 ? "No test cases yet." : "No matches."}
-                    </p>
-                  )}
-                </div>
+                  })
+                )}
               </div>
-
-              {selectedCases.length > 0 && (
-                <p className="text-xs text-muted-foreground">
-                  {selectedCases.length} case{selectedCases.length !== 1 ? "s" : ""} selected
-                </p>
-              )}
-
-              <div className="space-y-2">
-                <Label htmlFor="run-name">Run name</Label>
-                <Input
-                  id="run-name"
-                  type="text"
-                  value={runName}
-                  onChange={(e) => setRunName(e.target.value)}
-                  placeholder="e.g. Sprint 12 smoke test"
-                />
+              <div className="flex items-center justify-between">
+                <span className="rd-mono text-[11px] text-[var(--rd-muted)]">{selectedCases.length} selected</span>
+                <button
+                  type="button"
+                  disabled={!selectedCases.length || creatingRun}
+                  onClick={createManualRun}
+                  className="h-8 rounded-md px-3.5 text-[12.5px] font-semibold text-[var(--rd-on-accent)] transition-opacity hover:opacity-90 disabled:opacity-50"
+                  style={{ background: "var(--rd-accent)" }}
+                >
+                  {creatingRun ? "Starting…" : "Start manual run"}
+                </button>
               </div>
-
-              <Button
-                type="button"
-                disabled={!selectedCases.length || creatingRun}
-                onClick={createManualRun}
-                className="w-full"
-              >
-                {creatingRun ? "Creating run…" : "Start manual run"}
-              </Button>
             </div>
           </div>
-        </TabsContent>
+        )}
 
         {/* ── History tab ── */}
-        <TabsContent value="history">
-          {completedRuns.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border bg-muted/30 p-10 text-center">
-              <p className="text-sm font-medium">No completed runs yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Completed manual runs will appear here with links to their reports.
-              </p>
+        {activeTab === "history" && (
+          completedRuns.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-[var(--rd-border)] bg-[var(--rd-panel)] p-10 text-center">
+              <p className="text-[13px] font-medium">No completed runs yet</p>
+              <p className="mt-1 text-[13px] text-[var(--rd-muted)]">Completed manual runs will appear here with links to their reports.</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="overflow-hidden rounded-lg border border-[var(--rd-border)] bg-[var(--rd-panel)]">
               {completedRuns.map((run) => {
-                const passRate =
-                  run.total > 0 ? Math.round((run.passed / run.total) * 100) : 0;
+                const total = run.total || 1;
+                const passW = `${Math.round((run.passed / total) * 100)}%`;
+                const failW = `${Math.round((run.failed / total) * 100)}%`;
                 const date = run.completedAt
                   ? new Date(run.completedAt).toLocaleString()
                   : new Date(run.startedAt).toLocaleString();
                 return (
-                  <div
-                    key={run.id}
-                    className="flex items-center gap-4 rounded-xl border border-border bg-card px-5 py-4"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{run.name}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">{date}</p>
+                  <div key={run.id} className="flex items-center gap-4 border-b border-[var(--rd-border)] px-4 py-3 transition-colors hover:bg-[var(--rd-panel2)]">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[13.5px] font-medium">{run.name}</p>
+                      <p className="rd-mono mt-px text-[11px] text-[var(--rd-faint)]">{date}</p>
                     </div>
-                    <div className="hidden sm:flex items-center gap-4 text-sm">
-                      <span className="text-[var(--success)] font-semibold">
-                        {run.passed} passed
-                      </span>
-                      {run.failed > 0 && (
-                        <span className="text-destructive font-semibold">{run.failed} failed</span>
-                      )}
-                      <span className="text-muted-foreground">{passRate}%</span>
+                    <div className="flex h-1 w-[120px] overflow-hidden rounded-sm" style={{ background: "var(--rd-panel2)" }}>
+                      <div style={{ width: passW, background: "var(--rd-pass)" }} />
+                      <div style={{ width: failW, background: "var(--rd-fail)" }} />
                     </div>
-                    <a href={`/report/runs/${run.id}`}>
-                      <Button variant="outline" size="sm">
-                        View report
-                      </Button>
-                    </a>
+                    <span className="rd-mono w-[72px] text-right text-[11px]" style={{ color: "var(--rd-pass)" }}>{run.passed} pass</span>
+                    <span className="rd-mono w-[56px] text-right text-[11px]" style={{ color: run.failed > 0 ? "var(--rd-fail)" : "var(--rd-faint)" }}>{run.failed} fail</span>
+                    <a href={`/report/runs/${run.id}`} className="rd-mono text-[11px]" style={{ color: "var(--rd-accent)" }}>report →</a>
                   </div>
                 );
               })}
             </div>
-          )}
-        </TabsContent>
-      </Tabs>
+          )
+        )}
+      </main>
     </>
   );
 }

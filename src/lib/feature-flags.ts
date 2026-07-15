@@ -13,5 +13,7 @@ export const getFeatureFlags = cache(async () => {
       settings?.enableReleaseTracking ??
       process.env.ENABLE_RELEASE_TRACKING === "true",
     openRegistration: settings?.openRegistration ?? false,
+    enableBugTracking:
+      settings?.enableBugTracking ?? process.env.ENABLE_BUG_TRACKING === "true",
   };
 });

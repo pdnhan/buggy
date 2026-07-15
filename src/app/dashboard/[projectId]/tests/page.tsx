@@ -155,16 +155,14 @@ export default async function TestsPage({
   }));
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-6 py-8">
-      <TestsPanel
-        projectId={project.id}
-        testCasePrefix={project.testCasePrefix}
-        testCases={mappedTestCases}
-        activeManualRun={mappedRun}
-        suites={suites}
-        completedRuns={completedRuns}
-        importBatches={importBatches}
-      />
-    </main>
+    <TestsPanel
+      projectId={project.id}
+      testCasePrefix={project.testCasePrefix}
+      testCases={mappedTestCases}
+      activeManualRun={mappedRun}
+      suites={suites}
+      completedRuns={completedRuns}
+      importBatches={importBatches}
+    />
   );
 }

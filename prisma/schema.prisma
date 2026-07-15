@@ -8,23 +8,29 @@ datasource db {
 }
 
 model User {
-  id               String          @id @default(cuid())
-  name             String?
-  email            String          @unique
-  emailVerified    DateTime?
-  image            String?
+  id                 String          @id @default(cuid())
+  name               String?
+  email              String          @unique
+  emailVerified      DateTime?
+  image              String?
   password           String?
   isWorkspaceAdmin   Boolean         @default(false)
   mustChangePassword Boolean         @default(false)
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
-  accounts         Account[]
-  apiKeys          ApiKey[]
-  auditLogs        AuditLog[]
-  projects         ProjectMember[]
-  sessions         Session[]
-  testRuns         TestRun[]       @relation("CreatedBy")
-  suiteAssignments TestSuiteCase[] @relation("SuiteCaseAddedBy")
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+  accounts           Account[]
+  apiKeys            ApiKey[]
+  auditLogs          AuditLog[]
+  projects           ProjectMember[]
+  sessions           Session[]
+  testRuns           TestRun[]       @relation("CreatedBy")
+  suiteAssignments   TestSuiteCase[] @relation("SuiteCaseAddedBy")
+  assignedBugs       Bug[]           @relation("BugAssignedDeveloper")
+  qaOwnedBugs        Bug[]           @relation("BugResponsibleQa")
+  reportedBugs       Bug[]           @relation("BugReporter")
+  reopenEvents       ReopenEvent[]   @relation("ReopenEventReopenedBy")
+  reopenEventsAsDev  ReopenEvent[]   @relation("ReopenEventAssignedDeveloper")
+  reopenEventsAsQa   ReopenEvent[]   @relation("ReopenEventResponsibleQa")
 
   @@map("users")
 }
@@ -48,6 +54,7 @@ model WorkspaceSettings {
   enableSessionTesting  Boolean @default(false)
   enableReleaseTracking Boolean @default(false)
   openRegistration      Boolean @default(false)
+  enableBugTracking     Boolean @default(false)
 
   // Single-row table — always access via upsert({ where: { id: "singleton" } })
   @@map("workspace_settings")
@@ -98,6 +105,7 @@ model Project {
   description     String?
   testCasePrefix  String          @default("TC")
   testCaseCounter Int             @default(0)
+  bugCounter      Int             @default(0)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   apiKeys         ApiKey[]
@@ -108,6 +116,7 @@ model Project {
   testCases       TestCase[]
   testRuns        TestRun[]
   testSuites      TestSuite[]
+  bugs            Bug[]
 
   @@map("projects")
 }
@@ -133,32 +142,33 @@ model Module {
   createdAt DateTime   @default(now())
   project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
   testCases TestCase[]
+  bugs      Bug[]
 
   @@unique([projectId, name])
   @@map("modules")
 }
 
 model TestCase {
-  id            String          @id @default(cuid())
-  projectId     String
-  moduleId      String?
-  importBatchId String?
-  displayId     String
-  jiraKey       String?         @db.VarChar(32)
-  title         String          @db.VarChar(200)
+  id             String          @id @default(cuid())
+  projectId      String
+  moduleId       String?
+  importBatchId  String?
+  displayId      String
+  jiraKey        String?         @db.VarChar(32)
+  title          String          @db.VarChar(200)
   description    String?
   preconditions  String?
   expectedResult String?
   priority       TestPriority    @default(MEDIUM)
-  status        TestCaseStatus  @default(DRAFT)
-  tags          String[]        @default([])
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  importBatch   ImportBatch?    @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
-  module        Module?         @relation(fields: [moduleId], references: [id])
-  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  results       TestResult[]
-  suiteItems    TestSuiteCase[]
+  status         TestCaseStatus  @default(DRAFT)
+  tags           String[]        @default([])
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  importBatch    ImportBatch?    @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
+  module         Module?         @relation(fields: [moduleId], references: [id])
+  project        Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  results        TestResult[]
+  suiteItems     TestSuiteCase[]
 
   @@unique([projectId, displayId])
   @@index([projectId])
@@ -303,6 +313,106 @@ model ExploratorySession {
   @@map("exploratory_sessions")
 }
 
+model Bug {
+  id        String  @id @default(cuid())
+  projectId String
+  moduleId  String?
+  displayId String
+
+  // Identification
+  externalIssueId String?
+  issueTrackerUrl String?
+  title           String  @db.VarChar(200)
+  description     String?
+  sprint          String?
+  release         String?
+  fixVersion      String?
+
+  // Classification
+  severity        BugSeverity
+  priority        BugPriority     @default(MEDIUM)
+  bugType         String?
+  rootCause       RootCause?
+  detectionSource DetectionSource @default(QA)
+  detectionPhase  DetectionPhase
+  environment     String?
+  isRegression    Boolean         @default(false)
+
+  // Leakage — isLeaked is derived from detectionPhase by default; leakageOverridden
+  // marks that an authorized user manually set it, in which case isLeaked reflects
+  // their override instead of the automatic rule.
+  isLeaked              Boolean @default(false)
+  leakageOverridden     Boolean @default(false)
+  leakageOverrideReason String?
+
+  // Responsibility
+  assignedDeveloperId String?
+  responsibleQaId     String?
+  reporterId          String
+
+  // Status & dates
+  status            BugStatus @default(OPEN)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  firstDetectedDate DateTime?
+  firstFixedDate    DateTime?
+  lastFixedDate     DateTime?
+  closedDate        DateTime?
+  firstReopenedDate DateTime?
+  lastReopenedDate  DateTime?
+  reopenCount       Int       @default(0)
+
+  // Additional information
+  clientImpact      String?
+  businessImpact    String?
+  reproductionSteps String?
+  expectedResult    String?
+  actualResult      String?
+  notes             String?
+  labels            String[] @default([])
+  attachments       String[] @default([])
+
+  project           Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  module            Module?       @relation(fields: [moduleId], references: [id])
+  assignedDeveloper User?         @relation("BugAssignedDeveloper", fields: [assignedDeveloperId], references: [id])
+  responsibleQa     User?         @relation("BugResponsibleQa", fields: [responsibleQaId], references: [id])
+  reporter          User          @relation("BugReporter", fields: [reporterId], references: [id])
+  reopenEvents      ReopenEvent[]
+
+  @@unique([projectId, displayId])
+  @@index([projectId])
+  @@index([moduleId])
+  @@index([projectId, createdAt])
+  @@index([status])
+  @@index([severity])
+  @@map("bugs")
+}
+
+model ReopenEvent {
+  id                  String       @id @default(cuid())
+  bugId               String
+  sequenceNumber      Int
+  previousStatus      BugStatus
+  newStatus           BugStatus
+  reopenedAt          DateTime     @default(now())
+  reopenedById        String
+  reason              ReopenReason
+  environment         String?
+  releaseOrBuild      String?
+  assignedDeveloperId String?
+  responsibleQaId     String?
+  comment             String?
+
+  bug               Bug   @relation(fields: [bugId], references: [id], onDelete: Cascade)
+  reopenedBy        User  @relation("ReopenEventReopenedBy", fields: [reopenedById], references: [id])
+  assignedDeveloper User? @relation("ReopenEventAssignedDeveloper", fields: [assignedDeveloperId], references: [id])
+  responsibleQa     User? @relation("ReopenEventResponsibleQa", fields: [responsibleQaId], references: [id])
+
+  @@unique([bugId, sequenceNumber])
+  @@index([bugId])
+  @@map("reopen_events")
+}
+
 enum ProjectRole {
   ADMIN
   MEMBER
@@ -354,4 +464,97 @@ enum FailureCategory {
 enum ApiKeyScope {
   READ_WRITE
   READ_ONLY
+}
+
+enum BugSeverity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum BugPriority {
+  HIGHEST
+  HIGH
+  MEDIUM
+  LOW
+  LOWEST
+}
+
+enum BugStatus {
+  OPEN
+  IN_PROGRESS
+  READY_FOR_QA
+  IN_QA
+  FIXED
+  RESOLVED
+  CLOSED
+  REOPENED
+  REJECTED
+  DUPLICATE
+  CANNOT_REPRODUCE
+  DEFERRED
+}
+
+enum DetectionSource {
+  QA
+  DEVELOPER
+  INTERNAL_STAKEHOLDER
+  CLIENT
+  UAT_TESTER
+  END_USER
+  MONITORING_SYSTEM
+  SUPPORT_TEAM
+  PRODUCTION_OPERATIONS
+  OTHER
+}
+
+enum DetectionPhase {
+  DEVELOPMENT
+  CODE_REVIEW
+  UNIT_TESTING
+  INTEGRATION_TESTING
+  QA
+  REGRESSION_TESTING
+  STAGING
+  UAT
+  CLIENT_ACCEPTANCE
+  PRODUCTION
+}
+
+enum RootCause {
+  REQUIREMENT_MISUNDERSTANDING
+  MISSING_REQUIREMENT
+  INCORRECT_BUSINESS_LOGIC
+  VALIDATION_ISSUE
+  UI_IMPLEMENTATION_ISSUE
+  API_ISSUE
+  INTEGRATION_ISSUE
+  DATABASE_ISSUE
+  PERFORMANCE_ISSUE
+  SECURITY_ISSUE
+  ENVIRONMENT_ISSUE
+  DEPLOYMENT_ISSUE
+  CONFIGURATION_ISSUE
+  REGRESSION
+  MISSING_TEST_CASE
+  INCOMPLETE_TEST_COVERAGE
+  HUMAN_ERROR
+  THIRD_PARTY_DEPENDENCY
+  DATA_ISSUE
+  OTHER
+}
+
+enum ReopenReason {
+  FIX_DID_NOT_RESOLVE
+  ISSUE_STILL_REPRODUCIBLE
+  PARTIAL_FIX
+  ACCEPTANCE_CRITERIA_NOT_MET
+  REGRESSION_CAUSED_BY_FIX
+  DIFFERENT_SCENARIO_STILL_AFFECTED
+  INCORRECT_DEPLOYMENT
+  FIX_MISSING_FROM_RELEASE
+  ENVIRONMENT_MISMATCH
+  INSUFFICIENT_TEST_EVIDENCE
+  OTHER
 }
