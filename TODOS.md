@@ -1,7 +1,41 @@
 # TODOS
 
-Items deferred from `/plan-ceo-review` on 2026-03-24.
-Source plan: v1 REST API — Full CRUD Expansion (21 endpoints).
+Deferred work, highest priority first. Two sources so far:
+
+- `/plan-ceo-review`, 2026-03-24 — v1 REST API full CRUD expansion.
+- The v0.7.0.0 release, 2026-08-11 — gaps left open by the audit remediation.
+
+Entries marked *partially shipped* describe only what still remains; the
+part that shipped is summarised inline so the residue stays legible.
+
+---
+
+## P1 — Deploy Path Uses `prisma db push`, Not Migrations
+
+**What:** `docker-compose.yml` line 69 runs `npx prisma db push` instead of `npx prisma migrate deploy`.
+Migration files exist in `prisma/migrations/` (e.g. `20260811120000_add_exploratory_session_project_fk/migration.sql`)
+but are not wired into the deploy path. The most recent migration adds a foreign-key constraint to
+`exploratory_sessions.projectId` with a pre-flight `DELETE` to clean up orphan rows. If any orphan
+rows exist in production, the `ADD CONSTRAINT` will fail and the entire deploy (app startup) will fail.
+
+**Why:** Using `db push` (schema-based) instead of `migrate deploy` (history-based) means
+migrations are authored but not executed. This works fine until a migration contains a
+constraint that cannot be added to pre-existing orphan data. The migration file explicitly
+documents this risk with comments and a cleanup `DELETE`, but that cleanup is unreviewed and
+will silently delete data.
+
+**Risk:** A deploy will fail hard if an orphan row exists. Recovery requires either: (1) backing up
+and running the cleanup manually, (2) rolling back the schema change, or (3) restoring from backup.
+
+**Where to start:** Decide: stick with `db push` (simpler for this app's self-hosted scale, but
+risky on schema changes) or migrate to `migrate deploy` (add a migrations table, wire the deploy
+step). If keeping `db push`, add a pre-flight validation step to the deploy: check for orphans,
+report them, and halt if any are found. If switching to migrations, audit the migration file
+before deploying — the `DELETE` in `20260811120000_*` is the default policy and may need revision
+for your data.
+
+**Effort:** M (human: ~4 hours for full migration setup / CC: ~1 hour for pre-flight check only)
+**Depends on:** None — decision on deploy strategy
 
 ---
 
@@ -50,8 +84,14 @@ triggering event, queue a delivery. Delivery worker: HTTP POST with body +
 
 ## P2 — OpenAPI Spec + Interactive Docs
 
-**What:** Generate `openapi.yaml` from the working v1 implementation (21 endpoints),
-serve an interactive playground at `/api/v1/docs` (Scalar or Swagger UI).
+**What:** Generate `openapi.yaml` from the working v1 implementation, serve an
+interactive playground at `/api/v1/docs` (Scalar or Swagger UI).
+
+**Current v1 surface:** 16 route.ts files under `src/app/api/v1/` covering: api-keys
+(create, list, get, delete), bugs (list, get, create, update, reopen), defect-reports
+(list, create), metrics (get), projects (list), runs (list, ingest, get), test-cases
+(list, create, get, update, delete, bulk create), test-suites (list, create, get,
+update, delete, add/remove cases).
 
 **Why:** Enables SDK auto-generation in any language, gives integrators a testable
 playground, and creates a formal contract for breaking-change detection in CI.
@@ -61,7 +101,7 @@ playground, and creates a formal contract for breaking-change detection in CI.
 Alternatively, hand-write the spec post-shipping and validate it against live responses.
 
 **Effort:** M (human: ~3 days / CC: ~1 hour)
-**Depends on:** v1 API shipped and stable (all 21 endpoints)
+**Depends on:** v1 API shipped and stable
 
 ---
 
@@ -74,32 +114,45 @@ workspace by calling this endpoint repeatedly.
 **Why:** Exact email lookup reduces enumeration vs. autocomplete, but doesn't eliminate
 it. A determined caller can still enumerate the workspace user list one email at a time.
 
-**Where to start:** Apply the same rate limiting approach as `/api/admin/*` routes once
-the P3 Rate Limiting infrastructure (see below) is in place. The lookup endpoint is the
-highest-value target given it's accessible to project admins (a broader group than
-workspace admins).
+**Status:** Unblocked. Rate limiting infrastructure now exists in `src/lib/rate-limit.ts`.
+
+**Where to start:** The endpoint lives at `src/app/api/projects/[projectId]/members/lookup/route.ts`
+and currently has no rate limiting. Apply `rateLimit()` from `src/lib/rate-limit.ts` using the
+session user's ID as the bucket key — similar to how login throttling works in `src/lib/login-throttle.ts`.
+The lookup endpoint is the highest-value target given it's accessible to project admins (a broader
+group than workspace admins).
 
 **Effort:** S (human: ~30 min / CC: ~5 min)
-**Depends on:** P3 Rate Limiting infrastructure shipped
+**Depends on:** None — infrastructure shipped
 
 ---
 
 ## P3 — Rate Limiting
 
-**What:** Cap requests per API key per minute (e.g. 100 req/min) using a Redis-backed
-counter or Vercel edge middleware. Return 429 with a `Retry-After` header on violation.
+**Status:** PARTIALLY SHIPPED. Infrastructure now exists; work remains to complete the feature.
 
-**Why:** Without rate limiting, a single misbehaving CI pipeline can exhaust the
-Postgres connection pool for all users. API keys are tied to known owners so abuse is
-traceable today, but that's reactive not preventive.
+**What:** `src/lib/rate-limit.ts` is an in-process fixed-window limiter. `src/proxy.ts` applies
+it to credentials login (10 per 5 min) and `/api/v1/*` (120 per min), both keyed by **client IP**
+with a shared circuit-breaker fallback when `TRUST_PROXY_HOPS` is unset. `src/lib/login-throttle.ts`
+adds per-account failed-login throttling (10 failures per 15 min) that counts only failed attempts
+and clears on success. 429 responses carry `Retry-After`.
 
-**Where to start:** Evaluate `@upstash/ratelimit` (Redis-based, Vercel-compatible)
-vs an in-process token-bucket counter. The `resolveApiKey()` function in
-`src/lib/api-auth.ts` is the right place for public API checks. Also apply to
-`/api/admin/*` routes (scope: admin-only, so lower urgency than public API).
+**What remains:**
+- Limits are keyed by **IP, not per API key** — the original spec called for per-key limits but
+  the implementation is IP-based. API key-based limits would require a separate per-key bucket.
+- The store is **in-process**, so limit buckets multiply by replica count and reset on restart.
+  A shared store (Redis, Upstash, etc.) is still needed for multi-instance deployments.
+- `/api/admin/*` routes are still **not** rate limited — they accept session auth but have no
+  dedicated rate limit applied.
+
+**Where to start:** To complete: (1) decide whether API key-based limits matter for this app's
+deployment model; if yes, add a per-key bucket via `rateLimit()` in `src/lib/api-auth.ts`'s
+`resolveApiKey()` path; (2) migrate the in-process store to Redis for multi-instance support
+(the infrastructure in `rateLimit()` is abstract to the store); (3) add rate limiting to
+`/api/admin/*` routes via `checkRateLimit()` in `src/proxy.ts`.
 
 **Effort:** M (human: ~1 day / CC: ~30 min)
-**Trigger:** Add when active abuse patterns are observable in production logs.
+**Depends on:** None — infrastructure now exists.
 
 ---
 
@@ -135,22 +188,22 @@ in try/catch. On Prisma error, `setupComplete` stays `false` and requests redire
 
 ## P3 — Admin API JWT Re-validation
 
-**What:** Add per-request DB re-validation to `/api/admin/*` routes. Currently, these
-routes check `session.user.isWorkspaceAdmin` from the JWT. A demoted or deleted admin
-retains access until their JWT expires. Per-request check:
-`const user = await db.user.findUnique({ where: { id }, select: { isWorkspaceAdmin: true } })`
+**Status:** LARGELY SHIPPED. Per-request re-validation now exists but with a residual gap.
 
-**Why:** JWT staleness is an accepted trade-off in the RBAC v1 plan, but it means a
-demoted admin has a window of continued access. The window equals the JWT expiry duration.
+**What:** `src/auth.ts` re-reads `isWorkspaceAdmin` and `mustChangePassword` from the database
+in the `jwt` callback on a ~60 second interval (`CLAIM_REFRESH_INTERVAL_MS = 60_000`), and clears
+the privilege claims when the user row no longer exists.
 
-**Pros:** Immediate effect on demotion/deletion. Closes the staleness window.
-**Cons:** One extra DB query per admin API request. Low impact at self-hosted scale.
-**Context:** Deferred from RBAC v1 as accepted trade-off. Documented in the RBAC design
-doc. Low urgency — admin routes are admin-only and self-hosted instances rarely have
-concurrent admins being demoted.
+**Staleness window:** Now about 60 seconds rather than the JWT lifetime (previously an accepted
+trade-off, now substantially tighter).
+
+**Residual work:** The token's `id`, `sub`, and `email` claims still survive after user deletion.
+A deleted user can still satisfy a plain `session?.user?.id` check on non-admin routes — this is
+not an immediate concern on self-hosted scale but is a gap. A `tokenVersion` field or an
+existence check at the trusted boundary (`src/proxy.ts`) would close it completely.
 
 **Effort:** S (human: ~2 hours / CC: ~10 min)
-**Trigger:** When a scenario requiring immediate admin demotion effect is reported.
+**Depends on:** None — re-validation already shipped
 
 ---
 
@@ -168,3 +221,107 @@ default flag values on failure. Zero functional risk — defaults are all `false
 
 **Effort:** XS (human: ~15 min / CC: ~2 min)
 **Found by:** `/qa` on master, 2026-04-08
+
+---
+
+## P2 — `TRUST_PROXY_HOPS` Unset Weakens Login Rate Limiting
+
+**What:** With `TRUST_PROXY_HOPS` unset (the default, and the documented docker-compose
+deployment model in `docker-compose.yml`), `src/proxy.ts` cannot trust any per-client header.
+All clients share a single, coarse circuit-breaker bucket for login attempts (200 per 5 minutes
+across all users). This means a single attacker can generate enough traffic to trip the shared
+breaker and temporarily lock out every user's login, including the workspace admin.
+
+**Measured impact:** Roughly one request every 1.5 seconds is enough to keep every user's login
+returning 429, even legitimate users.
+
+**Why:** `X-Forwarded-For` is a plain request header; an untrusted client can set it to any value.
+Setting `TRUST_PROXY_HOPS > 0` tells the app to trust the rightmost N entries (written by the
+innermost N proxies), but only when a real proxy is actually in front of the app. Leaving it at 0
+is safe for direct deployments but sacrifices per-client fairness.
+
+**Where to start:** If deploying behind a reverse proxy (nginx, Caddy, load balancer), set
+`TRUST_PROXY_HOPS=1` (or higher if there are multiple proxy layers). The `docker-compose.yml`
+comment on line 46-52 explains the tradeoff. Per-account login throttling in `src/lib/login-throttle.ts`
+is unaffected and remains fair (10 failures per 15 min per email), so this is primarily a volume brake.
+
+**Effort:** XS (human: ~5 min / CC: ~2 min)
+**Depends on:** None — configuration only
+
+---
+
+## P2 — No Component Tests
+
+**What:** There are no `.test.tsx` files in `src/components/`, and `package.json` has no
+`@testing-library/react`, `jsdom`, or `happy-dom` dependencies. `vitest.config.ts` sets
+`environment: "node"`, so even if tests existed, they would run in Node, not a DOM environment.
+
+**Impact:** Recent fixes to `src/components/active-run-panel.tsx` and `src/components/bugs-panel.tsx`
+that addressed silent-data-loss behaviour are verified only by code review and manual testing,
+not automated tests. Browser-specific bugs (React re-render, event handler edge cases, state
+mutation) are not caught until production.
+
+**Why:** Component testing requires a DOM environment and React-specific assertions. The infrastructure
+has not been set up, likely deferred pending stability on core API logic (which has unit test coverage).
+
+**Where to start:** Add `@testing-library/react`, `jsdom` (or `happy-dom`), and update `vitest.config.ts`
+to use `environment: "jsdom"`. Write `.test.tsx` files for: (1) `active-run-panel.tsx` — verify the
+silent data loss fix (test that the state doesn't mutate when results arrive); (2) `bugs-panel.tsx` —
+similar test for that component. Use `render()` from `@testing-library/react`, `screen.getByRole()`,
+and `userEvent` for interactions.
+
+**Effort:** M (human: ~8 hours to set up + write 2-3 solid tests / CC: ~2 hours)
+**Depends on:** None — can start immediately
+
+---
+
+## P3 — Registration Endpoint Is a User-Enumeration Oracle
+
+**What:** `src/app/api/auth/register/route.ts` returns HTTP 409 ("email already exists") when
+a user submits an email that is registered, and HTTP 201 otherwise. This endpoint is unauthenticated
+and not rate limited (it only checks `openRegistration` feature flag). An attacker can submit emails
+one at a time and learn the full user roster via the status code alone.
+
+**Why:** Exact email confirmation is a user-enumeration vector. OWASP recommends returning the same
+response (201, with a generic message) whether the email is registered or not, or declining to register
+at all when `openRegistration` is false. Returning 409 distinguishes the two cases.
+
+**Scope:** Only reachable when `openRegistration` feature flag is enabled. Self-hosted instances
+likely keep this off, but it's a trap for instances that enable it.
+
+**Where to start:** Option (a): unify the response — return 201 and a generic success message regardless
+of whether the email existed. Include the instructions ("check your email to confirm") so the user
+experience doesn't change; a real validation email is never sent, so the confusion is internal.
+Option (b): check `openRegistration` before the user submits anything and reject registration entirely
+if it's off. This removes the endpoint as an enumeration oracle but also breaks the feature. Option (a)
+is safer.
+
+**Effort:** S (human: ~1 hour / CC: ~10 min)
+**Depends on:** None — fix only
+
+---
+
+## P3 — MCP `create_bug` Advertises Far Fewer Fields Than It Accepts
+
+**What:** The MCP tool definition for `create_bug` in `mcp-server/src/tools/bugs.ts` has two
+separate schemas: the advertised `inputSchema.properties` (lines 134-143, ~8 fields: title,
+description, severity, detectionPhase, rootCause, priority, environment, isRegression) and the
+Zod validator `CreateBugInput` (lines 17-55, ~26 fields: all of the above plus external_issue_id,
+issue_tracker_url, module_name, sprint, release, fixVersion, bugType, detectionSource,
+assignedDeveloperId, responsibleQaId, clientImpact, businessImpact, reproductionSteps,
+expectedResult, actualResult, notes, labels, firstDetectedDate).
+
+**Problem:** A client relying on the advertised schema cannot discover the 18 additional fields
+and will miss them. The Zod validator accepts all 26, so the API will happily ingest them if sent,
+but a code-generating client (or a user reading the schema) has no signal to include them.
+
+**Secondary issue:** `update_bug` has a similar but smaller mismatch, and cannot change
+`external_issue_id` or `issue_tracker_url` at all — those fields are not in `UpdateBugInput`.
+
+**Where to start:** Sync the advertised `inputSchema` with the Zod validator. Add the 18 missing
+fields to the `inputSchema.properties` block (lines 134-143) so clients can discover them. For
+`update_bug`, either extend `UpdateBugInput` to allow updating `external_issue_id` and
+`issue_tracker_url`, or document why they are immutable.
+
+**Effort:** S (human: ~30 min / CC: ~5 min)
+**Depends on:** None — schema cleanup only

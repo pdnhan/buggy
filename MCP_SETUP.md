@@ -65,10 +65,14 @@ curl -X POST http://localhost:3000/api/v1/api-keys \
 
 Or create via the UI: project settings → API Keys → Create.
 
+Minting a key requires the **ADMIN** role on the project. The key is a
+64-character hex string, shown once at creation and stored only as a
+hash — if you lose it, create a new one.
+
 ### 2. Set Environment Variable
 
 ```bash
-export TEST_MGMT_API_KEY="sk-..."
+export TEST_MGMT_API_KEY="<64-hex-char-key>"
 ```
 
 Or add to `~/.zshrc` / `~/.bashrc` for persistence.
@@ -81,7 +85,7 @@ npm install
 npm run build
 ```
 
-### 4. Try It Out
+### 4. Register in Claude Code
 
 Server is already registered in `.mcp.json` — just connect Claude Code:
 
@@ -94,17 +98,62 @@ npm run dev        # Start the app (http://localhost:3000)
 # You should see 24 tools listed
 ```
 
-**Example interaction:**
+### 5. Register in OpenAI Codex CLI
+
+Codex CLI stores MCP server configuration in `~/.codex/config.toml`. Add a `[mcp_servers.test-management]` section:
+
+```toml
+[mcp_servers.test-management]
+command = "node"
+args = ["/Users/dnpi/Git/buggy/mcp-server/dist/index.js"]
+env = { TEST_MGMT_API_URL = "http://localhost:3000", TEST_MGMT_API_KEY = "<64-hex-char-key>" }
+```
+
+Replace:
+- `/Users/dnpi/Git/buggy/` with your project's **absolute path**
+- `<64-hex-char-key>` with your API key (from step 1)
+
+Codex also has a `codex mcp add` subcommand that writes this entry for
+you; run `codex mcp add --help` for its current flags rather than
+copying them from here.
+
+Then start a Codex session and run `/mcp` — the server should be listed
+with its 24 tools.
+
+### 6. Register in ChatGPT Desktop
+
+ChatGPT Desktop shares MCP configuration with Codex CLI. You can configure it either by:
+
+**Option A: Edit `~/.codex/config.toml` directly** (same as Codex CLI above)
+
+**Option B: Use ChatGPT Desktop UI**
+1. Open ChatGPT Desktop → Settings → MCP servers
+2. Click "Add server"
+3. Name: `test-management`
+4. Server type: `STDIO`
+5. Command: `node /Users/dnpi/Git/buggy/mcp-server/dist/index.js`
+6. Environment variables:
+   ```
+   TEST_MGMT_API_URL=http://localhost:3000
+   TEST_MGMT_API_KEY=<64-hex-char-key>
+   ```
+7. Click Save, then Restart
+
+Again, replace the absolute path and API key as needed. Verify the 24 tools are available by typing `/mcp` in the composer.
+
+**Example interaction (any MCP client):**
 ```
 Me: Create a test case titled "Login with invalid password"
-Claude: Using test-management MCP, creates TC and returns display_id
+Assistant: Using test-management MCP, creates TC and returns display_id
 
 Me: Create a bug for failed test
-Claude: Posts to /api/v1/bugs, assigns to current API key user
+Assistant: Posts to /api/v1/bugs, assigns to current API key user
 
 Me: List critical bugs
-Claude: Queries /api/v1/bugs?severity=CRITICAL, paginated
+Assistant: Queries /api/v1/bugs?severity=CRITICAL, paginated
 ```
+
+**Path note:** The `.mcp.json` file uses a relative path (`mcp-server/dist/index.js`), which works because Claude Code resolves paths from the project root. For Codex CLI and ChatGPT Desktop, use an **absolute path** to the `dist/index.js` file as shown in steps 5 and 6 above.
 
 ## Tool Reference
 
@@ -173,7 +222,7 @@ npx vitest run
 Test the MCP server manually:
 ```bash
 npm run dev             # Terminal 1: start app
-# Terminal 2: export TEST_MGMT_API_KEY="sk-..." && node mcp-server/dist/index.js
+# Terminal 2: export TEST_MGMT_API_KEY="<64-hex-char-key>" && node mcp-server/dist/index.js
 # Or use Claude Code's test-management MCP tools
 ```
 
