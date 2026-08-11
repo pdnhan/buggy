@@ -26,7 +26,7 @@ Alternatively, create a key via the UI: project settings → API Keys → Create
 
 ```bash
 export TEST_MGMT_API_URL="http://localhost:3000"  # or your deployed URL
-export TEST_MGMT_API_KEY="sk-..."                  # the key from step 1
+export TEST_MGMT_API_KEY="<64-hex-char-key>"                  # the key from step 1
 ```
 
 ### 3. Build the Server
@@ -60,10 +60,48 @@ Add to your `.mcp.json` at the project root:
 Then set the env var in your shell:
 
 ```bash
-export TEST_MGMT_API_KEY="sk-..."
+export TEST_MGMT_API_KEY="<64-hex-char-key>"
 ```
 
 Or add to `~/.zshrc` / `~/.bashrc` for persistence.
+
+### 5. Register in OpenAI Codex CLI
+
+Codex CLI stores MCP server configuration in `~/.codex/config.toml`. Add a `[mcp_servers.test-management]` section:
+
+```toml
+[mcp_servers.test-management]
+command = "node"
+args = ["/absolute/path/to/mcp-server/dist/index.js"]
+env = { TEST_MGMT_API_URL = "http://localhost:3000", TEST_MGMT_API_KEY = "<64-hex-char-key>" }
+```
+
+**Important:** Use an **absolute path** to `mcp-server/dist/index.js`, not a relative path. Codex CLI launches the server from a different working directory than the project root.
+
+For a system-wide installation or to avoid hardcoding paths, you can also publish this package to npm and reference it by name instead of a local path.
+
+### 6. Register in ChatGPT Desktop
+
+ChatGPT Desktop supports local stdio MCP servers and shares configuration with Codex CLI via `~/.codex/config.toml`.
+
+**Option A: Edit `~/.codex/config.toml` directly** (same as step 5 above)
+
+**Option B: Use ChatGPT Desktop UI**
+1. Open ChatGPT Desktop → Settings → MCP servers
+2. Click "Add server"
+3. Name: `test-management`
+4. Server type: `STDIO`
+5. Command: `node /absolute/path/to/mcp-server/dist/index.js`
+6. Environment variables:
+   ```
+   TEST_MGMT_API_URL=http://localhost:3000
+   TEST_MGMT_API_KEY=<64-hex-char-key>
+   ```
+7. Click Save, then Restart
+
+After configuration, verify the server is connected by typing `/mcp` in the composer to view all available MCP servers and tools.
+
+For more details on Codex CLI and ChatGPT Desktop MCP configuration, see the [official ChatGPT Learn documentation](https://learn.chatgpt.com/docs/extend/mcp).
 
 ## Tools
 
@@ -127,7 +165,7 @@ Run the server locally for testing:
 ```bash
 cd mcp-server
 npm run build
-TEST_MGMT_API_URL=http://localhost:3000 TEST_MGMT_API_KEY=sk-... node dist/index.js
+TEST_MGMT_API_URL=http://localhost:3000 TEST_MGMT_API_KEY=<64-hex-char-key> node dist/index.js
 ```
 
 Use the MCP inspector to test tool calls:
