@@ -117,32 +117,11 @@ type Props = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STATUS_STYLES: Record<"PASSED" | "FAILED" | "BLOCKED", string> = {
-  PASSED:
-    "border-[var(--success)] bg-[oklch(from_var(--success)_l_c_h_/_0.10)] text-[var(--success)] font-semibold",
-  FAILED:
-    "border-destructive bg-[oklch(from_var(--destructive)_l_c_h_/_0.10)] text-destructive font-semibold",
-  BLOCKED:
-    "border-[var(--warning)] bg-[oklch(from_var(--warning)_l_c_h_/_0.10)] text-[var(--warning-foreground)] font-semibold",
-};
-
-const STATUS_SELECTED_STYLES: Record<"PASSED" | "FAILED" | "BLOCKED", string> = {
-  PASSED: "bg-[var(--success)] text-[var(--success-foreground)] border-[var(--success)]",
-  FAILED: "bg-destructive text-destructive-foreground border-destructive",
-  BLOCKED: "bg-[var(--warning)] text-[var(--warning-foreground)] border-[var(--warning)]",
-};
-
 const PRIORITY_VARIANT: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   CRITICAL: "destructive",
   HIGH: "default",
   MEDIUM: "secondary",
   LOW: "outline",
-};
-
-const CASE_STATUS_DOT: Record<string, string> = {
-  ACTIVE: "bg-[var(--success)]",
-  DRAFT: "bg-muted-foreground",
-  DEPRECATED: "bg-[var(--warning)]",
 };
 
 // ─── Redesign helpers (violet/mono palette) ────────────────────────────────────
@@ -419,8 +398,6 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
   const [runCaseTagFilter] = useState<string[]>([]);
   const [runName, setRunName] = useState(`Manual Run ${new Date().toLocaleDateString()}`);
   const [creatingRun, setCreatingRun] = useState(false);
-  const [completingRun, setCompletingRun] = useState(false);
-  const [updatingResultId, setUpdatingResultId] = useState<string | null>(null);
 
   // ── Suites ───────────────────────────────────────────────────────────────────
   const [suites, setSuites] = useState<TestSuite[]>(initialSuites);
@@ -530,11 +507,6 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
     }
     return result;
   }, [testCases, manageCaseSearch, manageCaseTagFilter]);
-
-  const pendingResults = useMemo(
-    () => activeManualRun?.results.filter((r) => r.status === "BLOCKED") ?? [],
-    [activeManualRun]
-  );
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -905,72 +877,9 @@ export function TestsPanel({ projectId, testCasePrefix, testCases, activeManualR
     }
   }
 
-  async function completeManualRun() {
-    if (!activeManualRun) return;
-    setCompletingRun(true);
-
-    try {
-      const response = await fetch(`/api/manual-runs/${activeManualRun.id}`, { method: "PATCH" });
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        toast.error(body.error ?? "Unable to complete run.");
-        return;
-      }
-      toast.success("Run marked as complete.");
-      router.refresh();
-    } catch {
-      toast.error("Network error — run not completed.");
-    } finally {
-      setCompletingRun(false);
-    }
-  }
-
-  async function updateManualResult(resultId: string, status: "PASSED" | "FAILED" | "BLOCKED") {
-    if (!activeManualRun) return;
-    setUpdatingResultId(resultId);
-
-    try {
-      const response = await fetch(
-        `/api/manual-runs/${activeManualRun.id}/results/${resultId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ status }),
-        }
-      );
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        toast.error(body.error ?? "Unable to update result.");
-        return;
-      }
-      router.refresh();
-    } catch {
-      toast.error("Network error — result not updated.");
-    } finally {
-      setUpdatingResultId(null);
-    }
-  }
-
-  async function passAllRemaining() {
-    if (!activeManualRun || !pendingResults.length) return;
-    const toastId = toast.loading(`Passing ${pendingResults.length} remaining…`);
-
-    try {
-      await Promise.all(
-        pendingResults.map((r) =>
-          fetch(`/api/manual-runs/${activeManualRun.id}/results/${r.id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ status: "PASSED" }),
-          })
-        )
-      );
-      toast.success("All remaining marked as passed.", { id: toastId });
-      router.refresh();
-    } catch {
-      toast.error("Network error — some results may not have updated.", { id: toastId });
-    }
-  }
+  // Manual run execution (completing a run, recording per-result pass/fail,
+  // bulk-passing remaining) lives in active-run-panel.tsx (the dedicated
+  // /tests/run/[runId] route) — this panel only starts runs.
 
   // ─── Suites ──────────────────────────────────────────────────────────────────
 

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { getProjectRole, userHasProjectAccess } from "@/lib/projects";
 import { resolveLeakage, requiresRootCauseBeforeClosure } from "@/lib/bug-tracking";
 import { auditLogEntry } from "@/lib/audit";
+import { findNonMemberIds } from "@/lib/project-membership";
 import {
   BUG_SEVERITY_VALUES,
   BUG_PRIORITY_VALUES,
@@ -121,6 +122,19 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     const leakage = resolveLeakage(nextPhase, payload.leakageOverride ?? carriedOverOverride);
     if (leakage.error) {
       return NextResponse.json({ error: leakage.error }, { status: 400 });
+    }
+
+    const nonMemberIds = await findNonMemberIds(existing.projectId, [
+      payload.assignedDeveloperId,
+      payload.responsibleQaId,
+    ]);
+    if (nonMemberIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: `assignedDeveloperId and responsibleQaId must reference members of the project. Not a member: ${nonMemberIds.join(", ")}`,
+        },
+        { status: 422 }
+      );
     }
 
     let moduleId = existing.moduleId;

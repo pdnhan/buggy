@@ -7,7 +7,26 @@
       "Bash(npm run:*)",
       "Bash(git checkout *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(chmod +x ~/.claude/skills/release-flow/scripts/*.sh)",
+      "Bash(echo \"0.6.0.0\")",
+      "Bash(~/.claude/skills/release-flow/scripts/bump-version.sh minor *)",
+      "Bash(~/.claude/skills/release-flow/scripts/bump-version.sh patch *)",
+      "Bash(~/.claude/skills/release-flow/scripts/bump-version.sh major *)",
+      "Bash(~/.claude/skills/release-flow/scripts/commits-since-release.sh)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(git fetch *)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d['scripts'], indent=2\\)\\)\")",
+      "Bash(npx eslint *)",
+      "Bash(npm audit *)",
+      "Bash(npm ls *)",
+      "Bash(git -C /Users/dnpi/Git/buggy ls-files)",
+      "Bash(grep -i \"\\\\.env$\")"
     ]
-  }
+  },
+  "enabledMcpjsonServers": [
+    "codegraph",
+    "test-management"
+  ],
+  "enableAllProjectMcpServers": true
 }

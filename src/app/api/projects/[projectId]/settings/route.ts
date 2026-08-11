@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { userHasProjectAccess } from "@/lib/projects";
+import { userCanWriteToProject } from "@/lib/projects";
 import { sanitizeTestCasePrefix } from "@/lib/test-case-ids";
 
 const updateSchema = z
@@ -30,7 +30,7 @@ export async function PATCH(
 
   const { projectId } = await params;
 
-  if (!(await userHasProjectAccess(session.user.id, projectId))) {
+  if (!(await userCanWriteToProject(session.user.id, projectId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

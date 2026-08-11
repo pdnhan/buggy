@@ -1,51 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
+import { fetchSuiteWithCases, formatSuiteWithCases } from "@/lib/api-formatters";
 
 const bodySchema = z.object({
   test_case_ids: z.array(z.string().min(1)).min(1),
 });
-
-async function fetchSuiteWithCases(suiteId: string) {
-  return db.testSuite.findUnique({
-    where: { id: suiteId },
-    include: {
-      cases: {
-        orderBy: { order: "asc" },
-        include: {
-          testCase: {
-            select: { id: true, displayId: true, title: true, priority: true, status: true },
-          },
-        },
-      },
-    },
-  });
-}
-
-function formatSuiteWithCases(suite: NonNullable<Awaited<ReturnType<typeof fetchSuiteWithCases>>>) {
-  return {
-    id: suite.id,
-    name: suite.name,
-    description: suite.description,
-    cases: suite.cases.map((c) => ({
-      order: c.order,
-      test_case: {
-        id: c.testCase.id,
-        display_id: c.testCase.displayId,
-        title: c.testCase.title,
-        priority: c.testCase.priority,
-        status: c.testCase.status,
-      },
-    })),
-    created_at: suite.createdAt,
-  };
-}
-
-function bearerToken(request: Request) {
-  const auth = request.headers.get("authorization");
-  return auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-}
 
 export async function POST(
   request: Request,
@@ -75,11 +36,19 @@ export async function POST(
     return NextResponse.json({ error: "Unable to add test cases." }, { status: 500 });
   }
 
+  // CQ-107: dedupe before both the ownership check and the insertion below —
+  // same defect and same fix as the internal twin at
+  // src/app/api/test-suites/[id]/cases/route.ts. Without it, a legitimate
+  // request listing the same id twice makes db.testCase.count() (which
+  // counts DISTINCT matching rows) come back smaller than
+  // test_case_ids.length and trip a false 422.
+  const testCaseIds = [...new Set(payload.test_case_ids)];
+
   // Cross-project ownership check
   const count = await db.testCase.count({
-    where: { id: { in: payload.test_case_ids }, projectId: apiKey.projectId },
+    where: { id: { in: testCaseIds }, projectId: apiKey.projectId },
   });
-  if (count !== payload.test_case_ids.length) {
+  if (count !== testCaseIds.length) {
     return NextResponse.json(
       { error: "One or more test case IDs do not belong to this project." },
       { status: 422 }
@@ -94,16 +63,21 @@ export async function POST(
 
   await db.$transaction([
     db.testSuiteCase.createMany({
-      data: payload.test_case_ids.map((tcId, i) => ({
+      data: testCaseIds.map((tcId, i) => ({
         suiteId: id,
         testCaseId: tcId,
         order: nextOrder + i,
       })),
       skipDuplicates: true,
     }),
-    // Clear import badge — case is now "owned" by a suite
+    // Clear import badge — case is now "owned" by a suite. projectId is
+    // redundant with the ownership `count` check above (which already 404s
+    // if any id isn't in apiKey.projectId) but keeps this query safe on its
+    // own terms rather than relying on that check never being reordered or
+    // removed later — see the internal twin at
+    // src/app/api/test-suites/[id]/cases/route.ts (CQ-101).
     db.testCase.updateMany({
-      where: { id: { in: payload.test_case_ids } },
+      where: { id: { in: testCaseIds }, projectId: apiKey.projectId },
       data: { importBatchId: null },
     }),
   ]);

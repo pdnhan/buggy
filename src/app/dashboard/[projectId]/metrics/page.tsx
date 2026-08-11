@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { userHasProjectAccess } from "@/lib/projects";
 import { MetricsPanel } from "@/components/metrics-panel";
 import { calculateFlakiness, TestHistoryItem } from "@/lib/flaky-detection";
+import { getProjectMetrics } from "@/lib/metrics";
 import { ResultStatus } from "@prisma/client";
 
 export default async function MetricsPage({
@@ -27,75 +28,25 @@ export default async function MetricsPage({
 
   if (!project) notFound();
 
-  const reports = await db.defectReport.findMany({
-    where: { projectId },
-    orderBy: { reportedAt: "desc" },
-    take: 10,
-  });
-
-  const latest = reports[0] ?? null;
-
-  const testCoverage =
-    latest && latest.totalRequirements > 0
-      ? Math.round((latest.requirementsCovered / latest.totalRequirements) * 100 * 10) / 10
-      : null;
-
-  const totalBugs = latest ? latest.testingBugsFound + latest.productionBugsFound : 0;
-  const ddp =
-    totalBugs > 0 && latest
-      ? Math.round((latest.testingBugsFound / totalBugs) * 100 * 10) / 10
-      : null;
-
-  const escapedDefects = latest?.productionBugsFound ?? null;
-  const defectLeakage = escapedDefects;
-
-  const failedResults = await db.testResult.findMany({
-    where: { run: { projectId }, status: { in: ["FAILED", "ERROR"] } },
-    select: { suite: true },
-  });
-
-  const densityMap: Record<string, number> = {};
-  for (const r of failedResults) {
-    const key = r.suite ?? "No module";
-    densityMap[key] = (densityMap[key] ?? 0) + 1;
-  }
-  const defectDensity = Object.entries(densityMap)
-    .map(([module, count]) => ({ module, count }))
-    .sort((a, b) => b.count - a.count);
-
-  const completedRuns = await db.testRun.findMany({
-    where: {
-      projectId,
-      status: "COMPLETED",
-      source: "MANUAL",
-      completedAt: { not: null },
-    },
-    select: { startedAt: true, completedAt: true },
-  });
-
-  const avgTimeToConfidenceMs =
-    completedRuns.length > 0
-      ? completedRuns.reduce(
-          (sum, r) => sum + (r.completedAt!.getTime() - r.startedAt.getTime()),
-          0
-        ) / completedRuns.length
-      : null;
-
-  const history = [...reports].reverse().map((r) => ({
-    date: r.reportedAt.toISOString(),
-    testCoverage:
-      r.totalRequirements > 0
-        ? Math.round((r.requirementsCovered / r.totalRequirements) * 100 * 10) / 10
-        : 0,
-    ddp:
-      r.testingBugsFound + r.productionBugsFound > 0
-        ? Math.round(
-            (r.testingBugsFound / (r.testingBugsFound + r.productionBugsFound)) * 100 * 10
-          ) / 10
-        : 0,
-    escapedDefects: r.productionBugsFound,
-    testingBugs: r.testingBugsFound,
-  }));
+  // CQ-112: this page used to re-implement getProjectMetrics()'s entire
+  // calculation inline (defect report percentages, defect density, average
+  // run duration) instead of calling it — and the copy had already diverged
+  // (this page rounded to 1 decimal, the lib didn't), so the dashboard and
+  // the public v1 /api/v1/metrics endpoint could report different numbers
+  // for the same project. getProjectMetrics is now the single
+  // implementation; this page only adds what's specific to IT (flakiness,
+  // which comes from a different source — automated TestRun history — and
+  // the total test case count).
+  const {
+    testCoverage,
+    ddp,
+    escapedDefects,
+    defectLeakage,
+    defectDensity,
+    avgTimeToConfidenceMs,
+    latestReport: latest,
+    history,
+  } = await getProjectMetrics(projectId);
 
   const automatedRuns = await db.testRun.findMany({
     where: { projectId, source: "AUTOMATED" },

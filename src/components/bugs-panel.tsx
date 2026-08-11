@@ -211,16 +211,35 @@ export function BugFormFields({
       {showStatus && (
         <div className="space-y-1">
           <Label htmlFor="bug-status">Status</Label>
-          <select
-            id="bug-status"
-            name="status"
-            defaultValue={defaults?.status ?? "OPEN"}
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            {BUG_STATUSES.filter((s) => s.value !== "REOPENED").map((s) => (
-              <option key={s.value} value={s.value}>{s.label}</option>
-            ))}
-          </select>
+          {defaults?.status === "REOPENED" ? (
+            // CQ-125: REOPENED is deliberately excluded from the <select>'s options
+            // (reopening must go through the separate "Reopen" action so a reason is
+            // always recorded). A <select> whose defaultValue matches no <option>
+            // silently falls back to selecting the first option — so a currently
+            // REOPENED bug would show/submit "Open" the moment this form saved,
+            // silently corrupting the status while reopenEvents still says otherwise.
+            // Rendering a read-only field instead (with no name="status" in the DOM)
+            // fixes this two ways at once: it displays the true status, and it keeps
+            // the "status" key out of the submitted payload entirely, so saving other
+            // fields on a reopened bug leaves its status untouched rather than either
+            // corrupting it or being rejected by the API (which also rejects
+            // "REOPENED" as a directly-settable status).
+            <div className="flex h-9 items-center gap-1.5 rounded-md border border-input bg-muted px-3 text-sm">
+              <span className={cn("h-1.5 w-1.5 rounded-full", STATUS_DOT.REOPENED)} />
+              Reopened
+            </div>
+          ) : (
+            <select
+              id="bug-status"
+              name="status"
+              defaultValue={defaults?.status ?? "OPEN"}
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {BUG_STATUSES.filter((s) => s.value !== "REOPENED").map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
+          )}
           <p className="text-xs text-muted-foreground">
             To reopen a bug, use the &ldquo;Reopen&rdquo; action instead — it requires a reason.
           </p>
@@ -356,11 +375,23 @@ export function BugFormFields({
   );
 }
 
-export function buildBugPayload(form: HTMLFormElement) {
+// CQ-126: `opts.clearEmpty` controls what an empty optional field means.
+// - Create (`opts` omitted): empty means "not provided" -> `undefined`, so
+//   JSON.stringify drops the key. The create schema (POST /api/bugs) only
+//   accepts `.optional()` for these fields, not `null`, so sending `null`
+//   there would fail validation.
+// - Edit (`clearEmpty: true`): empty means "the user cleared this field" ->
+//   explicit `null`, which the edit schema (PUT /api/bugs/[id]) accepts via
+//   `.optional().nullable()` and treats as "clear the stored value". Without
+//   this, `JSON.stringify` silently drops empty fields from the PUT body and
+//   the API leaves old values in place — e.g. an assigned developer could
+//   never be unassigned through the UI.
+export function buildBugPayload(form: HTMLFormElement, opts?: { clearEmpty?: boolean }) {
   const formData = new FormData(form);
-  const str = (key: string) => {
+  const str = (key: string): string | null | undefined => {
     const v = String(formData.get(key) ?? "").trim();
-    return v || undefined;
+    if (v) return v;
+    return opts?.clearEmpty ? null : undefined;
   };
   return {
     title: String(formData.get("title") ?? "").trim(),
@@ -462,14 +493,14 @@ export function BugsPanel({ projectId, role, bugs, modules, members }: Props) {
     event.preventDefault();
     if (!editTarget) return;
     setSavingEdit(true);
-    const payload = buildBugPayload(event.currentTarget);
+    const payload = buildBugPayload(event.currentTarget, { clearEmpty: true });
     const toastId = toast.loading("Saving changes…");
 
     try {
       const response = await fetch(`/api/bugs/${editTarget.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, moduleName: payload.moduleName ?? null }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { userHasProjectAccess } from "@/lib/projects";
+import { userHasProjectAccess, userCanWriteToProject } from "@/lib/projects";
 
 export async function GET(
   _request: Request,
@@ -69,7 +69,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Run not found." }, { status: 404 });
   }
 
-  if (!(await userHasProjectAccess(session.user.id, run.projectId))) {
+  if (!(await userCanWriteToProject(session.user.id, run.projectId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

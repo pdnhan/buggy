@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -59,39 +60,61 @@ export function ActiveRunPanel({ run: initialRun, testsUrl = "/dashboard" }: { r
   const skipped = results.filter((r) => r.status === "SKIPPED").length;
   const pending = results.filter((r) => r.status === "BLOCKED").length;
 
-  async function updateStatus(resultId: string, status: "PASSED" | "FAILED" | "SKIPPED") {
-    setUpdatingId(resultId);
+  // Shared by updateStatus and saveNotes so both paths get the same
+  // ok-check, error surfacing, and network-failure handling. Returns
+  // whether the PATCH actually succeeded so callers only update local
+  // state (and thus what the tester sees) when the server confirms it.
+  async function patchResult(resultId: string, body: Record<string, unknown>): Promise<boolean> {
     try {
       const res = await fetch(`/api/manual-runs/${initialRun.id}/results/${resultId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
-      if (res.ok) {
-        setResults((prev) => prev.map((r) => (r.id === resultId ? { ...r, status } : r)));
+      if (!res.ok) {
+        toast.error("Failed to save your change. Please try again.");
+        return false;
       }
-    } finally {
-      setUpdatingId(null);
+      return true;
+    } catch {
+      toast.error("Network error — your change was not saved.");
+      return false;
     }
+  }
+
+  async function updateStatus(resultId: string, status: "PASSED" | "FAILED" | "SKIPPED") {
+    setUpdatingId(resultId);
+    const ok = await patchResult(resultId, { status });
+    if (ok) {
+      setResults((prev) => prev.map((r) => (r.id === resultId ? { ...r, status } : r)));
+    }
+    setUpdatingId(null);
   }
 
   async function saveNotes(resultId: string) {
     const result = results.find((r) => r.id === resultId);
     if (!result || result.status === "BLOCKED") return;
     const noteText = notes[resultId] ?? "";
-    await fetch(`/api/manual-runs/${initialRun.id}/results/${resultId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: result.status, notes: noteText }),
-    });
-    setResults((prev) => prev.map((r) => (r.id === resultId ? { ...r, notes: noteText } : r)));
+    // Intentionally omits `status` — sending the status captured at render
+    // time here could race a concurrent updateStatus() call and revert the
+    // result the tester just set. Notes and status are saved independently.
+    const ok = await patchResult(resultId, { notes: noteText });
+    if (ok) {
+      setResults((prev) => prev.map((r) => (r.id === resultId ? { ...r, notes: noteText } : r)));
+    }
   }
 
   async function completeRun() {
     setCompleting(true);
     try {
-      await fetch(`/api/manual-runs/${initialRun.id}`, { method: "PATCH" });
+      const res = await fetch(`/api/manual-runs/${initialRun.id}`, { method: "PATCH" });
+      if (!res.ok) {
+        toast.error("Failed to complete the run. Please try again.");
+        return;
+      }
       router.push(`/report/runs/${initialRun.id}`);
+    } catch {
+      toast.error("Network error — the run was not completed.");
     } finally {
       setCompleting(false);
     }

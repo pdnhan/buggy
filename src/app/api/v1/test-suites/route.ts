@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
+import { fetchSuiteWithCases, formatSuiteWithCases } from "@/lib/api-formatters";
 
 const createSchema = z.object({
   name: z.string().trim().min(1).max(120),
@@ -9,74 +10,64 @@ const createSchema = z.object({
   test_case_ids: z.array(z.string().min(1)).default([]),
 });
 
-async function fetchSuiteWithCases(suiteId: string) {
-  return db.testSuite.findUnique({
-    where: { id: suiteId },
-    include: {
-      cases: {
-        orderBy: { order: "asc" },
-        include: {
-          testCase: {
-            select: { id: true, displayId: true, title: true, priority: true, status: true },
-          },
-        },
-      },
-    },
-  });
-}
-
-function formatSuiteWithCases(suite: NonNullable<Awaited<ReturnType<typeof fetchSuiteWithCases>>>) {
-  return {
-    id: suite.id,
-    name: suite.name,
-    description: suite.description,
-    cases: suite.cases.map((c) => ({
-      order: c.order,
-      test_case: {
-        id: c.testCase.id,
-        display_id: c.testCase.displayId,
-        title: c.testCase.title,
-        priority: c.testCase.priority,
-        status: c.testCase.status,
-      },
-    })),
-    created_at: suite.createdAt,
-  };
-}
+// Mirrors the pagination bounds already advertised by the MCP `list_test_suites`
+// tool (limit: min 1, max 200, default 50) — see mcp-server/src/tools/test-suites.ts.
+const DEFAULT_LIMIT = 50;
+const MAX_LIMIT = 200;
 
 export async function GET(request: Request) {
-  const token = request.headers.get("authorization")?.startsWith("Bearer ")
-    ? request.headers.get("authorization")!.slice(7).trim()
-    : "";
+  const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
 
   const apiKey = await resolveApiKey(token);
   if (!apiKey) return NextResponse.json({ error: "Invalid API key." }, { status: 401 });
 
+  const { searchParams } = new URL(request.url);
+  const cursor = searchParams.get("cursor") ?? undefined;
+
+  const rawLimit = searchParams.get("limit");
+  let limit = DEFAULT_LIMIT;
+  if (rawLimit !== null) {
+    const parsed = Number(rawLimit);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      return NextResponse.json(
+        { error: "limit must be a positive integer." },
+        { status: 400 }
+      );
+    }
+    limit = Math.min(parsed, MAX_LIMIT);
+  }
+
   const suites = await db.testSuite.findMany({
     where: { projectId: apiKey.projectId },
     orderBy: { createdAt: "desc" },
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
     include: { _count: { select: { cases: true } } },
   });
+
+  const hasNextPage = suites.length > limit;
+  const page = hasNextPage ? suites.slice(0, limit) : suites;
+  const nextCursor = hasNextPage ? (page[page.length - 1]?.id ?? null) : null;
 
   await db.apiKey.update({ where: { id: apiKey.id }, data: { lastUsedAt: new Date() } });
 
   return NextResponse.json({
-    test_suites: suites.map((s) => ({
+    test_suites: page.map((s) => ({
       id: s.id,
       name: s.name,
       description: s.description,
       case_count: s._count.cases,
       created_at: s.createdAt,
     })),
+    next_cursor: nextCursor,
+    has_next_page: hasNextPage,
     project_id: apiKey.projectId,
   });
 }
 
 export async function POST(request: Request) {
-  const token = request.headers.get("authorization")?.startsWith("Bearer ")
-    ? request.headers.get("authorization")!.slice(7).trim()
-    : "";
+  const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
 
   const apiKey = await resolveApiKey(token);

@@ -2,17 +2,20 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { userHasProjectAccess } from "@/lib/projects";
+import { userCanWriteToProject } from "@/lib/projects";
 
 const patchSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   description: z.string().max(2000).optional().nullable(),
 });
 
+// Both callers below are writes (rename/delete a suite) — VIEWER must not
+// pass this check, so this uses userCanWriteToProject rather than mere
+// membership.
 async function getSuiteWithAccess(userId: string, suiteId: string) {
   const suite = await db.testSuite.findUnique({ where: { id: suiteId } });
   if (!suite) return null;
-  if (!(await userHasProjectAccess(userId, suite.projectId))) return null;
+  if (!(await userCanWriteToProject(userId, suite.projectId))) return null;
   return suite;
 }
 

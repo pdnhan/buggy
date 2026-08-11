@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
 import { reserveTestCaseDisplayIds } from "@/lib/test-case-ids";
+import { formatTestCase } from "@/lib/api-formatters";
+import { parseLimitParam } from "@/lib/api-pagination";
 
 const jiraKeySchema = z
   .string()
@@ -24,40 +26,8 @@ const createSchema = z.object({
   jira_key: jiraKeySchema.optional().nullable(),
 });
 
-function formatTestCase(tc: {
-  id: string;
-  displayId: string;
-  title: string;
-  description: string | null;
-  preconditions: string | null;
-  expectedResult: string | null;
-  tags: string[];
-  priority: string;
-  status: string;
-  jiraKey: string | null;
-  createdAt: Date;
-  module: { name: string } | null;
-}) {
-  return {
-    id: tc.id,
-    display_id: tc.displayId,
-    title: tc.title,
-    description: tc.description,
-    preconditions: tc.preconditions,
-    expected_result: tc.expectedResult,
-    tags: tc.tags,
-    priority: tc.priority,
-    status: tc.status,
-    jira_key: tc.jiraKey,
-    module: tc.module ? { name: tc.module.name } : null,
-    created_at: tc.createdAt,
-  };
-}
-
 export async function GET(request: Request) {
-  const token = request.headers.get("authorization")?.startsWith("Bearer ")
-    ? request.headers.get("authorization")!.slice(7).trim()
-    : "";
+  const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
 
   const apiKey = await resolveApiKey(token);
@@ -65,8 +35,9 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const cursor = searchParams.get("cursor") ?? undefined;
-  const rawLimit = Number(searchParams.get("limit") ?? "100");
-  const limit = Math.min(Math.max(rawLimit, 1), 200);
+  const limitResult = parseLimitParam(searchParams, 100, 200);
+  if (limitResult.error) return limitResult.error;
+  const limit = limitResult.limit;
   const search = searchParams.get("search")?.trim() ?? undefined;
 
   const testCases = await db.testCase.findMany({
@@ -95,9 +66,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const token = request.headers.get("authorization")?.startsWith("Bearer ")
-    ? request.headers.get("authorization")!.slice(7).trim()
-    : "";
+  const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
 
   const apiKey = await resolveApiKey(token);

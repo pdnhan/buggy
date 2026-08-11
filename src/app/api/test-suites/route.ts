@@ -3,7 +3,7 @@ import { z } from "zod";
 import { Prisma } from "@prisma/client";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
+import { ensureProjectForUser, userHasProjectAccess, userCanWriteToProject } from "@/lib/projects";
 
 const createSchema = z.object({
   projectId: z.string().min(1).optional(),
@@ -69,7 +69,7 @@ export async function POST(request: Request) {
       : await ensureProjectForUser(session.user.id);
 
     if (!project) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!(await userHasProjectAccess(session.user.id, project.id))) {
+    if (!(await userCanWriteToProject(session.user.id, project.id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

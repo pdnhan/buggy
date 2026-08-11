@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import type { MonthlyKpis, KpiStatus, DEFAULT_KPI_TARGETS } from "@/lib/bug-tracking";
 import type { DateBasis } from "@/app/dashboard/[projectId]/quality/page";
+import { csvCell } from "@/lib/csv";
 
 type TrendPoint = {
   month: string;
@@ -97,30 +98,43 @@ function KpiCard({
   );
 }
 
-function exportKpisToCsv(props: Props) {
+// Pure row-building, split out of exportKpisToCsv() so it's testable
+// without touching the DOM (Blob/URL.createObjectURL/anchor click) that
+// the rest of the export flow needs. Exported for src/components/quality-panel.test.ts.
+//
+// CQ-110: projectName is user-controlled (project settings) and every
+// other field flows through the same helper for consistency — one escape
+// path, no field left to bypass it later.
+export function buildKpiCsvLines(props: Props, now: Date = new Date()): string[] {
   const { projectName, month, dateBasis, kpis, criticalProductionBugs } = props;
   const lines: string[] = [];
-  lines.push(`Project,${projectName}`);
-  lines.push(`Reporting month,${month}`);
-  lines.push(`Date basis,${DATE_BASIS_LABELS[dateBasis]}`);
-  lines.push(`Export date,${new Date().toISOString()}`);
+  lines.push(`Project,${csvCell(projectName)}`);
+  lines.push(`Reporting month,${csvCell(month)}`);
+  lines.push(`Date basis,${csvCell(DATE_BASIS_LABELS[dateBasis])}`);
+  lines.push(`Export date,${csvCell(now.toISOString())}`);
   lines.push("");
   lines.push("KPI,Value");
-  lines.push(`Total unique bugs,${kpis.totalUniqueBugs}`);
-  lines.push(`QA-caught bugs,${kpis.qaCaughtBugs}`);
-  lines.push(`UAT-found bugs,${kpis.uatFoundBugs}`);
-  lines.push(`Production-leaked bugs,${kpis.productionLeakedBugs}`);
-  lines.push(`Total leaked bugs,${kpis.totalLeakedBugs}`);
-  lines.push(`Critical bugs,${kpis.criticalBugs}`);
-  lines.push(`High-severity bugs,${kpis.highSeverityBugs}`);
-  lines.push(`Critical production bugs,${criticalProductionBugs}`);
-  lines.push(`Reopened bugs,${kpis.reopenedBugs}`);
-  lines.push(`Total reopen events,${kpis.totalReopenEvents}`);
-  lines.push(`Average reopens per reopened bug,${round1(kpis.avgReopensPerReopenedBug)}`);
-  lines.push(`QA detection rate (%),${round1(kpis.qaDetectionRate)}`);
-  lines.push(`Production leakage rate (%),${round1(kpis.productionLeakageRate)}`);
-  lines.push(`Total leakage rate (%),${round1(kpis.totalLeakageRate)}`);
-  lines.push(`Reopen rate (%),${round1(kpis.reopenRate)}`);
+  lines.push(`Total unique bugs,${csvCell(kpis.totalUniqueBugs)}`);
+  lines.push(`QA-caught bugs,${csvCell(kpis.qaCaughtBugs)}`);
+  lines.push(`UAT-found bugs,${csvCell(kpis.uatFoundBugs)}`);
+  lines.push(`Production-leaked bugs,${csvCell(kpis.productionLeakedBugs)}`);
+  lines.push(`Total leaked bugs,${csvCell(kpis.totalLeakedBugs)}`);
+  lines.push(`Critical bugs,${csvCell(kpis.criticalBugs)}`);
+  lines.push(`High-severity bugs,${csvCell(kpis.highSeverityBugs)}`);
+  lines.push(`Critical production bugs,${csvCell(criticalProductionBugs)}`);
+  lines.push(`Reopened bugs,${csvCell(kpis.reopenedBugs)}`);
+  lines.push(`Total reopen events,${csvCell(kpis.totalReopenEvents)}`);
+  lines.push(`Average reopens per reopened bug,${csvCell(round1(kpis.avgReopensPerReopenedBug))}`);
+  lines.push(`QA detection rate (%),${csvCell(round1(kpis.qaDetectionRate))}`);
+  lines.push(`Production leakage rate (%),${csvCell(round1(kpis.productionLeakageRate))}`);
+  lines.push(`Total leakage rate (%),${csvCell(round1(kpis.totalLeakageRate))}`);
+  lines.push(`Reopen rate (%),${csvCell(round1(kpis.reopenRate))}`);
+  return lines;
+}
+
+function exportKpisToCsv(props: Props) {
+  const lines = buildKpiCsvLines(props);
+  const { month } = props;
 
   const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" });
   const url = URL.createObjectURL(blob);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { userHasProjectAccess } from "@/lib/projects";
+import { userCanWriteToProject } from "@/lib/projects";
 
 export async function DELETE(
   _request: Request,
@@ -24,7 +24,7 @@ export async function DELETE(
     return NextResponse.json({ error: "API key not found." }, { status: 404 });
   }
 
-  if (!(await userHasProjectAccess(session.user.id, apiKey.projectId))) {
+  if (!(await userCanWriteToProject(session.user.id, apiKey.projectId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

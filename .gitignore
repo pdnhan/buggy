@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+mcp-server/node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -39,6 +40,7 @@ yarn-error.log*
 # build
 /dist
 /build
+mcp-server/dist/
 
 # typescript
 *.tsbuildinfo
@@ -46,3 +48,13 @@ next-env.d.ts
 
 /src/generated/prisma
 .gstack/
+
+# CodeGraph local index (sqlite db, WAL, daemon pid/log) — machine-local, ~10M
+.codegraph/
+
+# Assistant tooling configs that are personal rather than project-wide.
+# .claude/ and .mcp.json are intentionally NOT ignored: they configure the
+# MCP server this repo ships in mcp-server/, so they are shared setup.
+.gemini/
+GEMINI.md
+opencode.jsonc

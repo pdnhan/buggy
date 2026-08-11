@@ -99,24 +99,25 @@ model VerificationToken {
 }
 
 model Project {
-  id              String          @id @default(cuid())
-  name            String
-  slug            String          @unique
-  description     String?
-  testCasePrefix  String          @default("TC")
-  testCaseCounter Int             @default(0)
-  bugCounter      Int             @default(0)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  apiKeys         ApiKey[]
-  defectReports   DefectReport[]
-  importBatches   ImportBatch[]
-  modules         Module[]
-  members         ProjectMember[]
-  testCases       TestCase[]
-  testRuns        TestRun[]
-  testSuites      TestSuite[]
-  bugs            Bug[]
+  id                  String               @id @default(cuid())
+  name                String
+  slug                String               @unique
+  description         String?
+  testCasePrefix      String               @default("TC")
+  testCaseCounter     Int                  @default(0)
+  bugCounter          Int                  @default(0)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  apiKeys             ApiKey[]
+  defectReports       DefectReport[]
+  importBatches       ImportBatch[]
+  modules             Module[]
+  members             ProjectMember[]
+  testCases           TestCase[]
+  testRuns            TestRun[]
+  testSuites          TestSuite[]
+  bugs                Bug[]
+  exploratorySessions ExploratorySession[]
 
   @@map("projects")
 }
@@ -131,6 +132,7 @@ model ProjectMember {
   user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([projectId, userId])
+  @@index([userId])
   @@map("project_members")
 }
 
@@ -248,7 +250,10 @@ model ApiKey {
   project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([keyHash])
+  // No @@index([keyHash]) — `@unique` above already creates a unique index
+  // on keyHash, which Postgres/Prisma also use to serve equality lookups; a
+  // second plain index on the same column is pure write/storage overhead
+  // with no query it serves that the unique index doesn't already (CQ-111).
   @@index([keyPrefix])
   @@map("api_keys")
 }
@@ -308,6 +313,12 @@ model ExploratorySession {
   startedAt DateTime  @default(now())
   endedAt   DateTime?
   tags      String[]  @default([])
+  // CQ-111: projectId was a plain scalar column with no FK relation to
+  // Project — @@index([projectId]) below gave the *query* a usable index,
+  // but nothing enforced referential integrity or cascaded deletes, unlike
+  // every other per-project model in this schema (Bug, TestCase, Module,
+  // ...). A deleted project left its exploratory sessions orphaned.
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId])
   @@map("exploratory_sessions")
@@ -379,12 +390,24 @@ model Bug {
   reporter          User          @relation("BugReporter", fields: [reporterId], references: [id])
   reopenEvents      ReopenEvent[]
 
+  // CQ-111: every query in src/lib/bug-filters.ts (the bug register list +
+  // CSV export) ANDs its filter onto a mandatory `projectId` equality — a
+  // caller is never scoped by status/severity alone. A bare @@index([status])
+  // or @@index([severity]) is therefore close to unusable: Postgres would
+  // have to scan every project's rows matching that status/severity and then
+  // filter projectId out of the result, when a projectId-LEADING composite
+  // lets it narrow to the one project first. Replaced both with
+  // projectId-leading composites matching that actual query shape.
+  //
+  // (Index effectiveness here is reasoned from the query shapes in
+  // bug-filters.ts, not measured — there is no live database in this
+  // environment to run EXPLAIN against.)
   @@unique([projectId, displayId])
   @@index([projectId])
   @@index([moduleId])
   @@index([projectId, createdAt])
-  @@index([status])
-  @@index([severity])
+  @@index([projectId, status])
+  @@index([projectId, severity])
   @@map("bugs")
 }
 

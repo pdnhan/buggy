@@ -2,7 +2,7 @@ import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
+import { ensureProjectForUser, userCanWriteToProject } from "@/lib/projects";
 import { reserveTestCaseDisplayIds } from "@/lib/test-case-ids";
 import { autoCorrectJiraKey } from "@/lib/jira";
 import ExcelJS from "exceljs";
@@ -95,7 +95,7 @@ export async function POST(request: Request) {
 
   if (!project) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const projectId = project.id;
-  if (!(await userHasProjectAccess(session.user.id, projectId))) {
+  if (!(await userCanWriteToProject(session.user.id, projectId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

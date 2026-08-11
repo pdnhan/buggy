@@ -43,6 +43,14 @@ services:
       AUTH_GITHUB_SECRET: "${AUTH_GITHUB_SECRET:-}"
       ENABLE_SESSION_TESTING: "${ENABLE_SESSION_TESTING:-false}"
       ENABLE_RELEASE_TRACKING: "${ENABLE_RELEASE_TRACKING:-false}"
+      # Number of trusted reverse-proxy hops in front of this app. This
+      # compose file publishes the app port directly (no proxy in front), so
+      # this must stay unset/0 here. If you put a reverse proxy in front of
+      # this deployment, set it to the number of hops (usually 1) so
+      # src/proxy.ts can trust X-Forwarded-For for per-client rate limiting;
+      # left at 0, request rate limiting fails open per-client and falls
+      # back to a coarse, shared circuit breaker (see CLAUDE.md).
+      TRUST_PROXY_HOPS: "${TRUST_PROXY_HOPS:-0}"
     ports:
       - "3000:3000"
 

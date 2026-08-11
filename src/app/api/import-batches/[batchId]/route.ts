@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { userCanWriteToProject } from "@/lib/projects";
 
 // ─── PATCH /api/import-batches/[batchId] ──────────────────────────────────────
 // Dismisses the banner for an import batch without deleting the cases.
@@ -17,11 +18,9 @@ export async function PATCH(
   const batch = await db.importBatch.findUnique({ where: { id: batchId } });
   if (!batch) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Verify user has access to this project
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: batch.projectId, userId: session.user.id } },
-  });
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await userCanWriteToProject(session.user.id, batch.projectId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const updated = await db.importBatch.update({
     where: { id: batchId },
@@ -47,10 +46,9 @@ export async function DELETE(
   const batch = await db.importBatch.findUnique({ where: { id: batchId } });
   if (!batch) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const member = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: batch.projectId, userId: session.user.id } },
-  });
-  if (!member) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await userCanWriteToProject(session.user.id, batch.projectId))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   // Delete remaining cases + the batch in a single transaction
   const result = await db.$transaction(async (tx) => {

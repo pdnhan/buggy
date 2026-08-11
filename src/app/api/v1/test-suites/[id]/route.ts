@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
+import { fetchSuiteWithCases, formatSuiteWithCases } from "@/lib/api-formatters";
 
 const patchSchema = z
   .object({
@@ -9,46 +10,6 @@ const patchSchema = z
     description: z.string().max(2000).nullable(),
   })
   .partial();
-
-async function fetchSuiteWithCases(suiteId: string) {
-  return db.testSuite.findUnique({
-    where: { id: suiteId },
-    include: {
-      cases: {
-        orderBy: { order: "asc" },
-        include: {
-          testCase: {
-            select: { id: true, displayId: true, title: true, priority: true, status: true },
-          },
-        },
-      },
-    },
-  });
-}
-
-function formatSuiteWithCases(suite: NonNullable<Awaited<ReturnType<typeof fetchSuiteWithCases>>>) {
-  return {
-    id: suite.id,
-    name: suite.name,
-    description: suite.description,
-    cases: suite.cases.map((c) => ({
-      order: c.order,
-      test_case: {
-        id: c.testCase.id,
-        display_id: c.testCase.displayId,
-        title: c.testCase.title,
-        priority: c.testCase.priority,
-        status: c.testCase.status,
-      },
-    })),
-    created_at: suite.createdAt,
-  };
-}
-
-function bearerToken(request: Request) {
-  const auth = request.headers.get("authorization");
-  return auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-}
 
 export async function GET(
   request: Request,

@@ -7,6 +7,8 @@ import { reserveBugDisplayIds } from "@/lib/bug-ids";
 import { resolveLeakage } from "@/lib/bug-tracking";
 import { auditLogEntry } from "@/lib/audit";
 import { buildBugWhere } from "@/lib/bug-filters";
+import { findNonMemberIds } from "@/lib/project-membership";
+import { parseLimitParam } from "@/lib/api-pagination";
 import {
   BUG_SEVERITY_VALUES,
   BUG_PRIORITY_VALUES,
@@ -64,8 +66,9 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const requestedProjectId = searchParams.get("projectId");
   const cursor = searchParams.get("cursor") ?? undefined;
-  const rawLimit = Number(searchParams.get("limit") ?? "50");
-  const limit = Math.min(Math.max(rawLimit, 1), 200);
+  const limitResult = parseLimitParam(searchParams, 50, 200);
+  if (limitResult.error) return limitResult.error;
+  const limit = limitResult.limit;
 
   const project = requestedProjectId
     ? { id: requestedProjectId }
@@ -128,6 +131,20 @@ export async function POST(request: Request) {
     const leakage = resolveLeakage(payload.detectionPhase, payload.leakageOverride ?? null);
     if (leakage.error) {
       return NextResponse.json({ error: leakage.error }, { status: 400 });
+    }
+
+    const nonMemberIds = await findNonMemberIds(project.id, [
+      payload.assignedDeveloperId,
+      payload.responsibleQaId,
+      payload.reporterId,
+    ]);
+    if (nonMemberIds.length > 0) {
+      return NextResponse.json(
+        {
+          error: `assignedDeveloperId, responsibleQaId, and reporterId must reference members of the project. Not a member: ${nonMemberIds.join(", ")}`,
+        },
+        { status: 422 }
+      );
     }
 
     const bug = await db.$transaction(async (tx) => {

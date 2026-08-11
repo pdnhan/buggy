@@ -1,14 +1,18 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
 import { categoryForStatus } from "@/lib/failure-category";
+import { parseLimitParam } from "@/lib/api-pagination";
 
 type ResultStatus = "PASSED" | "FAILED" | "SKIPPED" | "ERROR";
 
 const payloadSchema = z.object({
   name: z.string().trim().min(1).max(200),
-  project_id: z.string().min(1),
+  // Optional: when absent, the run is created under the API key's own
+  // project (see POST handler below). When present, it must match the
+  // key's project — this is a tenant boundary, not a convenience default.
+  project_id: z.string().min(1).optional(),
   results: z
     .array(
       z.object({
@@ -31,11 +35,6 @@ function mapStatus(status: "passed" | "failed" | "skipped" | "error") {
   return "ERROR" as ResultStatus;
 }
 
-function bearerToken(request: Request) {
-  const auth = request.headers.get("authorization");
-  return auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-}
-
 export async function GET(request: Request) {
   const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
@@ -47,8 +46,9 @@ export async function GET(request: Request) {
   const source = searchParams.get("source") ?? undefined;
   const status = searchParams.get("status") ?? undefined;
   const cursor = searchParams.get("cursor") ?? undefined;
-  const rawLimit = Number(searchParams.get("limit") ?? "20");
-  const limit = Math.min(Math.max(rawLimit, 1), 100);
+  const limitResult = parseLimitParam(searchParams, 20, 100);
+  if (limitResult.error) return limitResult.error;
+  const limit = limitResult.limit;
 
   const runs = await db.testRun.findMany({
     where: {
@@ -91,19 +91,30 @@ export async function POST(request: Request) {
   const apiKey = await resolveApiKey(token);
   if (!apiKey) return NextResponse.json({ error: "Invalid API key." }, { status: 401 });
 
+  if (apiKey.scope === "READ_ONLY") {
+    return NextResponse.json({ error: "This API key is read-only." }, { status: 403 });
+  }
+
   try {
     const payload = payloadSchema.parse(await request.json());
 
-    if (payload.project_id !== apiKey.projectId) {
+    // project_id is optional: when the caller omits it, default to the
+    // project the API key is scoped to. When the caller does provide it,
+    // it must match the key's project exactly — this 403 is a real tenant
+    // boundary and must not be weakened just because the field is now
+    // optional.
+    if (payload.project_id !== undefined && payload.project_id !== apiKey.projectId) {
       return NextResponse.json(
         { error: "API key does not have access to this project." },
         { status: 403 }
       );
     }
 
+    const projectId = payload.project_id ?? apiKey.projectId;
+
     const run = await db.testRun.create({
       data: {
-        projectId: payload.project_id,
+        projectId,
         createdById: apiKey.userId,
         name: payload.name,
         source: "AUTOMATED",

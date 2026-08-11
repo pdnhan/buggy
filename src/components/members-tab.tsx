@@ -103,16 +103,21 @@ export function MembersTab({ projectId, currentUserId, initialMembers }: Props) 
     const prev = members;
     setMembers((m) => m.map((x) => (x.userId === member.userId ? { ...x, role: newRole } : x)));
 
-    const res = await fetch(`/api/projects/${projectId}/members/${member.userId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ role: newRole }),
-    });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/members/${member.userId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role: newRole }),
+      });
 
-    if (!res.ok) {
+      if (!res.ok) {
+        setMembers(prev);
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? "Failed to change role.");
+      }
+    } catch {
       setMembers(prev);
-      const data = (await res.json()) as { error?: string };
-      toast.error(data.error ?? "Failed to change role.");
+      toast.error("Network error. Role was not changed.");
     }
   }
 
@@ -120,14 +125,19 @@ export function MembersTab({ projectId, currentUserId, initialMembers }: Props) 
     const prev = members;
     setMembers((m) => m.filter((x) => x.userId !== member.userId));
 
-    const res = await fetch(`/api/projects/${projectId}/members/${member.userId}`, {
-      method: "DELETE",
-    });
+    try {
+      const res = await fetch(`/api/projects/${projectId}/members/${member.userId}`, {
+        method: "DELETE",
+      });
 
-    if (!res.ok) {
+      if (!res.ok) {
+        setMembers(prev);
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? "Failed to remove member.");
+      }
+    } catch {
       setMembers(prev);
-      const data = (await res.json()) as { error?: string };
-      toast.error(data.error ?? "Failed to remove member.");
+      toast.error("Network error. Member was not removed.");
     }
   }
 
