@@ -1,7 +1,41 @@
 # TODOS
 
-Items deferred from `/plan-ceo-review` on 2026-03-24.
-Source plan: v1 REST API — Full CRUD Expansion (21 endpoints).
+Deferred work, highest priority first. Two sources so far:
+
+- `/plan-ceo-review`, 2026-03-24 — v1 REST API full CRUD expansion.
+- The v0.7.0.0 release, 2026-08-11 — gaps left open by the audit remediation.
+
+Entries marked *partially shipped* describe only what still remains; the
+part that shipped is summarised inline so the residue stays legible.
+
+---
+
+## P1 — Deploy Path Uses `prisma db push`, Not Migrations
+
+**What:** `docker-compose.yml` line 69 runs `npx prisma db push` instead of `npx prisma migrate deploy`.
+Migration files exist in `prisma/migrations/` (e.g. `20260811120000_add_exploratory_session_project_fk/migration.sql`)
+but are not wired into the deploy path. The most recent migration adds a foreign-key constraint to
+`exploratory_sessions.projectId` with a pre-flight `DELETE` to clean up orphan rows. If any orphan
+rows exist in production, the `ADD CONSTRAINT` will fail and the entire deploy (app startup) will fail.
+
+**Why:** Using `db push` (schema-based) instead of `migrate deploy` (history-based) means
+migrations are authored but not executed. This works fine until a migration contains a
+constraint that cannot be added to pre-existing orphan data. The migration file explicitly
+documents this risk with comments and a cleanup `DELETE`, but that cleanup is unreviewed and
+will silently delete data.
+
+**Risk:** A deploy will fail hard if an orphan row exists. Recovery requires either: (1) backing up
+and running the cleanup manually, (2) rolling back the schema change, or (3) restoring from backup.
+
+**Where to start:** Decide: stick with `db push` (simpler for this app's self-hosted scale, but
+risky on schema changes) or migrate to `migrate deploy` (add a migrations table, wire the deploy
+step). If keeping `db push`, add a pre-flight validation step to the deploy: check for orphans,
+report them, and halt if any are found. If switching to migrations, audit the migration file
+before deploying — the `DELETE` in `20260811120000_*` is the default policy and may need revision
+for your data.
+
+**Effort:** M (human: ~4 hours for full migration setup / CC: ~1 hour for pre-flight check only)
+**Depends on:** None — decision on deploy strategy
 
 ---
 
@@ -187,35 +221,6 @@ default flag values on failure. Zero functional risk — defaults are all `false
 
 **Effort:** XS (human: ~15 min / CC: ~2 min)
 **Found by:** `/qa` on master, 2026-04-08
-
----
-
-## P1 — Deploy Path Uses `prisma db push`, Not Migrations
-
-**What:** `docker-compose.yml` line 69 runs `npx prisma db push` instead of `npx prisma migrate deploy`.
-Migration files exist in `prisma/migrations/` (e.g. `20260811120000_add_exploratory_session_project_fk/migration.sql`)
-but are not wired into the deploy path. The most recent migration adds a foreign-key constraint to
-`exploratory_sessions.projectId` with a pre-flight `DELETE` to clean up orphan rows. If any orphan
-rows exist in production, the `ADD CONSTRAINT` will fail and the entire deploy (app startup) will fail.
-
-**Why:** Using `db push` (schema-based) instead of `migrate deploy` (history-based) means
-migrations are authored but not executed. This works fine until a migration contains a
-constraint that cannot be added to pre-existing orphan data. The migration file explicitly
-documents this risk with comments and a cleanup `DELETE`, but that cleanup is unreviewed and
-will silently delete data.
-
-**Risk:** A deploy will fail hard if an orphan row exists. Recovery requires either: (1) backing up
-and running the cleanup manually, (2) rolling back the schema change, or (3) restoring from backup.
-
-**Where to start:** Decide: stick with `db push` (simpler for this app's self-hosted scale, but
-risky on schema changes) or migrate to `migrate deploy` (add a migrations table, wire the deploy
-step). If keeping `db push`, add a pre-flight validation step to the deploy: check for orphans,
-report them, and halt if any are found. If switching to migrations, audit the migration file
-before deploying — the `DELETE` in `20260811120000_*` is the default policy and may need revision
-for your data.
-
-**Effort:** M (human: ~4 hours for full migration setup / CC: ~1 hour for pre-flight check only)
-**Depends on:** None — decision on deploy strategy
 
 ---
 
