@@ -96,7 +96,7 @@ curl -X POST http://localhost:3000/api/v1/runs \
 - **Language**: [TypeScript](https://www.typescriptlang.org/)
 - **ORM**: [Prisma](https://www.prisma.io/)
 - **Database**: [PostgreSQL](https://www.postgresql.org/)
-- **Auth**: [NextAuth.js v5](https://authjs.dev/)
+- **Auth**: [NextAuth.js v5](https://authjs.dev/) — session/credentials config in `src/auth.ts`; per-account login/API-key throttling in `src/lib/login-throttle.ts` + `src/lib/api-auth.ts`; request-level gating (setup flow, admin routes, IP rate limiting) in `src/proxy.ts`
 - **Styling**: [Tailwind CSS v4](https://tailwindcss.com/) + [Base UI](https://base-ui.com/)
 
 ---
