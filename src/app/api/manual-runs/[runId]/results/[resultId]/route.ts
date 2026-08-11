@@ -2,12 +2,19 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { userHasProjectAccess } from "@/lib/projects";
+import { userCanWriteToProject } from "@/lib/projects";
 
-const updateResultSchema = z.object({
-  status: z.enum(["PASSED", "FAILED", "SKIPPED"]),
-  notes: z.string().max(10_000).optional(),
-});
+const updateResultSchema = z
+  .object({
+    status: z.enum(["PASSED", "FAILED", "SKIPPED"]).optional(),
+    notes: z.string().max(10_000).optional(),
+  })
+  // The client saves status and notes independently (saving notes must
+  // never re-send a stale status and clobber a concurrent status update),
+  // so at least one of the two must be present but neither is required.
+  .refine((data) => data.status !== undefined || data.notes !== undefined, {
+    message: "At least one of status or notes must be provided.",
+  });
 
 export async function PATCH(
   request: Request,
@@ -30,7 +37,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Manual run not found." }, { status: 404 });
   }
 
-  if (!(await userHasProjectAccess(session.user.id, run.projectId))) {
+  if (!(await userCanWriteToProject(session.user.id, run.projectId))) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -49,8 +56,8 @@ export async function PATCH(
     await db.testResult.update({
       where: { id: target.id },
       data: {
-        status: payload.status,
-        notes: payload.notes,
+        ...(payload.status !== undefined && { status: payload.status }),
+        ...(payload.notes !== undefined && { notes: payload.notes }),
       },
     });
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { userHasProjectAccess } from "@/lib/projects";
+import { userHasProjectAccess, userCanWriteToProject } from "@/lib/projects";
 import { autoCorrectJiraKey } from "@/lib/jira";
 
 const jiraKeySchema = z
@@ -40,6 +40,18 @@ async function getTestCaseWithAccess(userId: string, testCaseId: string) {
   return testCase;
 }
 
+// Used by PUT/DELETE — a VIEWER can read a test case but must not mutate one.
+async function getTestCaseWithWriteAccess(userId: string, testCaseId: string) {
+  const testCase = await db.testCase.findUnique({
+    where: { id: testCaseId },
+    include: { module: true },
+  });
+
+  if (!testCase) return null;
+  if (!(await userCanWriteToProject(userId, testCase.projectId))) return null;
+  return testCase;
+}
+
 // ─── GET /api/test-cases/[id] ─────────────────────────────────────────────────
 
 export async function GET(
@@ -70,7 +82,7 @@ export async function PUT(
   try {
     const payload = updateTestCaseSchema.parse(await request.json());
 
-    const existing = await getTestCaseWithAccess(session.user.id, id);
+    const existing = await getTestCaseWithWriteAccess(session.user.id, id);
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
     let moduleId = existing.moduleId;
@@ -124,7 +136,7 @@ export async function DELETE(
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const testCase = await getTestCaseWithAccess(session.user.id, id);
+  const testCase = await getTestCaseWithWriteAccess(session.user.id, id);
   if (!testCase) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await db.testCase.delete({ where: { id } });

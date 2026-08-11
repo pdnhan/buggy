@@ -7,6 +7,7 @@ vi.mock("@/auth", () => ({
 vi.mock("@/lib/db", () => ({
   db: {
     bug: { findMany: vi.fn() },
+    projectMember: { findMany: vi.fn() },
     $transaction: vi.fn(),
   },
 }));
@@ -28,6 +29,7 @@ const mockGetRole = getProjectRole as ReturnType<typeof vi.fn>;
 const mockHasAccess = userHasProjectAccess as ReturnType<typeof vi.fn>;
 const mockDb = db as unknown as {
   bug: { findMany: ReturnType<typeof vi.fn> };
+  projectMember: { findMany: ReturnType<typeof vi.fn> };
   $transaction: ReturnType<typeof vi.fn>;
 };
 
@@ -84,6 +86,46 @@ describe("GET /api/bugs", () => {
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.bugs).toHaveLength(1);
+  });
+
+  // CQ-106: Number("abc") is NaN, which used to reach Prisma as `take`
+  // (a 500) instead of a clear validation error.
+  it("returns 400 for a non-numeric limit", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockHasAccess.mockResolvedValue(true);
+    const res = await GET(makeGetRequest("projectId=p1&limit=abc"));
+    expect(res.status).toBe(400);
+    expect(mockDb.bug.findMany).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 for a negative limit", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockHasAccess.mockResolvedValue(true);
+    const res = await GET(makeGetRequest("projectId=p1&limit=-1"));
+    expect(res.status).toBe(400);
+  });
+
+  it("returns 400 for a zero limit", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockHasAccess.mockResolvedValue(true);
+    const res = await GET(makeGetRequest("projectId=p1&limit=0"));
+    expect(res.status).toBe(400);
+  });
+
+  it("applies the default limit (50) when absent", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockHasAccess.mockResolvedValue(true);
+    mockDb.bug.findMany.mockResolvedValue([]);
+    await GET(makeGetRequest("projectId=p1"));
+    expect(mockDb.bug.findMany.mock.calls[0][0].take).toBe(51);
+  });
+
+  it("passes a valid limit through as `take`", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockHasAccess.mockResolvedValue(true);
+    mockDb.bug.findMany.mockResolvedValue([]);
+    await GET(makeGetRequest("projectId=p1&limit=5"));
+    expect(mockDb.bug.findMany.mock.calls[0][0].take).toBe(6);
   });
 });
 
@@ -185,5 +227,32 @@ describe("POST /api/bugs", () => {
     expect(res.status).toBe(201);
     const createArgs = tx.bug.create.mock.calls[0][0];
     expect(createArgs.data.isLeaked).toBe(true);
+  });
+
+  // CQ-103: assignee/reporter ids must belong to the target project
+  it("returns 422 when assignedDeveloperId is not a member of the project", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockGetRole.mockResolvedValue("MEMBER");
+    mockDb.projectMember.findMany.mockResolvedValue([]); // no members match the supplied id
+    const res = await POST(
+      makePostRequest({ ...validPayload, assignedDeveloperId: "outsider-user" })
+    );
+    expect(res.status).toBe(422);
+    const data = await res.json();
+    expect(data.error).toMatch(/must reference members of the project/i);
+    expect(mockDb.$transaction).not.toHaveBeenCalled();
+  });
+
+  it("creates the bug when assignedDeveloperId is a member of the project", async () => {
+    mockAuth.mockResolvedValue(session);
+    mockGetRole.mockResolvedValue("MEMBER");
+    mockDb.projectMember.findMany.mockResolvedValue([{ userId: "teammate-1" }]);
+    const tx = mockTransaction();
+    const res = await POST(
+      makePostRequest({ ...validPayload, assignedDeveloperId: "teammate-1" })
+    );
+    expect(res.status).toBe(201);
+    const createArgs = tx.bug.create.mock.calls[0][0];
+    expect(createArgs.data.assignedDeveloperId).toBe("teammate-1");
   });
 });

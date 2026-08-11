@@ -78,23 +78,27 @@ export function AdminUsersClient({
     setCreateError(null);
     setCreating(true);
 
-    const res = await fetch("/api/admin/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: createEmail.trim().toLowerCase(), name: createName.trim() || undefined }),
-    });
+    try {
+      const res = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: createEmail.trim().toLowerCase(), name: createName.trim() || undefined }),
+      });
 
-    setCreating(false);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setCreateError(data.error ?? "Failed to create user.");
+        return;
+      }
 
-    if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      setCreateError(data.error ?? "Failed to create user.");
-      return;
+      const data = (await res.json()) as { user: User; tempPassword: string };
+      setUsers((prev) => [...prev, data.user]);
+      setCreatedPassword(data.tempPassword);
+    } catch {
+      setCreateError("Network error. Failed to create user.");
+    } finally {
+      setCreating(false);
     }
-
-    const data = (await res.json()) as { user: User; tempPassword: string };
-    setUsers((prev) => [...prev, data.user]);
-    setCreatedPassword(data.tempPassword);
   }
 
   async function handleCopyPassword() {
@@ -112,26 +116,34 @@ export function AdminUsersClient({
       prev.map((u) => (u.id === user.id ? { ...u, isWorkspaceAdmin: newValue } : u))
     );
 
-    const res = await fetch(`/api/admin/users/${user.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ isWorkspaceAdmin: newValue }),
-    });
+    try {
+      const res = await fetch(`/api/admin/users/${user.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isWorkspaceAdmin: newValue }),
+      });
 
-    if (!res.ok) {
+      if (!res.ok) {
+        // Snap back
+        setUsers((prev) =>
+          prev.map((u) => (u.id === user.id ? { ...u, isWorkspaceAdmin: user.isWorkspaceAdmin } : u))
+        );
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? "Failed to update role.");
+        return;
+      }
+
+      const action = newValue ? "promoted" : "demoted";
+      toast.success(
+        `${user.name ?? user.email} ${action}. Changes take effect when they next sign in.`
+      );
+    } catch {
       // Snap back
       setUsers((prev) =>
         prev.map((u) => (u.id === user.id ? { ...u, isWorkspaceAdmin: user.isWorkspaceAdmin } : u))
       );
-      const data = (await res.json()) as { error?: string };
-      toast.error(data.error ?? "Failed to update role.");
-      return;
+      toast.error("Network error. Role was not updated.");
     }
-
-    const action = newValue ? "promoted" : "demoted";
-    toast.success(
-      `${user.name ?? user.email} ${action}. Changes take effect when they next sign in.`
-    );
   }
 
   async function handleRemoveConfirm() {
@@ -139,43 +151,52 @@ export function AdminUsersClient({
     setRemoving(true);
     setRemoveError(null);
 
-    const res = await fetch(`/api/admin/users/${removeTarget.id}`, { method: "DELETE" });
+    try {
+      const res = await fetch(`/api/admin/users/${removeTarget.id}`, { method: "DELETE" });
 
-    setRemoving(false);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setRemoveError(data.error ?? "Failed to remove user.");
+        return;
+      }
 
-    if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      setRemoveError(data.error ?? "Failed to remove user.");
-      return;
+      setUsers((prev) => prev.filter((u) => u.id !== removeTarget.id));
+      toast.success(`${removeTarget.name ?? removeTarget.email} has been removed.`);
+      setRemoveTarget(null);
+    } catch {
+      setRemoveError("Network error. Failed to remove user.");
+    } finally {
+      setRemoving(false);
     }
-
-    setUsers((prev) => prev.filter((u) => u.id !== removeTarget.id));
-    toast.success(`${removeTarget.name ?? removeTarget.email} has been removed.`);
-    setRemoveTarget(null);
   }
 
   async function handleResetConfirm() {
     if (!resetTarget) return;
     setResetting(true);
 
-    const res = await fetch(`/api/admin/users/${resetTarget.id}/reset-password`, { method: "POST" });
+    try {
+      const res = await fetch(`/api/admin/users/${resetTarget.id}/reset-password`, { method: "POST" });
 
-    setResetting(false);
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? "Failed to reset password.");
+        setResetTarget(null);
+        return;
+      }
 
-    if (!res.ok) {
-      const data = (await res.json()) as { error?: string };
-      toast.error(data.error ?? "Failed to reset password.");
+      const data = (await res.json()) as { tempPassword: string };
+      setResetPassword(data.tempPassword);
+      setResetCopied(false);
+      setUsers((prev) =>
+        prev.map((u) => (u.id === resetTarget.id ? { ...u, mustChangePassword: true } : u))
+      );
+      router.refresh();
+    } catch {
+      toast.error("Network error. Failed to reset password.");
       setResetTarget(null);
-      return;
+    } finally {
+      setResetting(false);
     }
-
-    const data = (await res.json()) as { tempPassword: string };
-    setResetPassword(data.tempPassword);
-    setResetCopied(false);
-    setUsers((prev) =>
-      prev.map((u) => (u.id === resetTarget.id ? { ...u, mustChangePassword: true } : u))
-    );
-    router.refresh();
   }
 
   async function handleCopyResetPassword() {
@@ -186,7 +207,7 @@ export function AdminUsersClient({
   }
 
   return (
-    <AdminLayout activeTab="users">
+    <AdminLayout>
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
+import { ensureProjectForUser, userHasProjectAccess, userIsProjectAdmin } from "@/lib/projects";
 import { generateApiKey, hashApiKey } from "@/lib/api-auth";
 
 const createKeySchema = z.object({
@@ -59,7 +59,10 @@ export async function POST(request: Request) {
       : await ensureProjectForUser(session.user.id);
 
     if (!project) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!(await userHasProjectAccess(session.user.id, project.id))) {
+    // API keys grant READ_WRITE access to the project's data — only admins
+    // may mint them. Membership alone (userHasProjectAccess) would let a
+    // VIEWER escalate to full write access via the v1 API.
+    if (!(await userIsProjectAdmin(session.user.id, project.id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

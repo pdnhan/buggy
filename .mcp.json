@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "codegraph": {
+      "type": "stdio",
+      "command": "codegraph",
+      "args": [
+        "serve",
+        "--mcp"
+      ]
+    },
+    "test-management": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "mcp-server/dist/index.js"
+      ],
+      "env": {
+        "TEST_MGMT_API_URL": "http://localhost:3000",
+        "TEST_MGMT_API_KEY": "${TEST_MGMT_API_KEY}"
+      }
+    }
+  }
+}

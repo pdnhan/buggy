@@ -24,8 +24,12 @@ Welcome to **itgrate-test-management**, a test management platform for QA teams.
 ### Testing (Vitest)
 - `npx vitest run` — Run all tests
 - `npx vitest run src/lib/foo.test.ts` — Run single test file
-- `npx vitest run --grep "pattern"` — Run tests matching pattern
+- `npx vitest run -t "pattern"` — Run tests matching pattern (Vitest's CLI has no `--grep`)
 - `npx vitest run --coverage` — Run with coverage
+
+**Note on mocks:** `vitest.config.ts` sets `mockReset: true`, so mocks reset before each test.
+Arm mocks per-test in `beforeEach()`, not in `vi.mock()` factory — factory-time
+`mockResolvedValue` gets wiped at test start.
 
 ---
 
@@ -90,6 +94,8 @@ if (error instanceof z.ZodError) {
 
 ```
 src/
+├── proxy.ts                 # Every auth/rate-limit gate: setup, /admin, mustChangePassword, login/API rate limits
+├── auth.ts                  # NextAuth v5 config — NOT src/lib/auth.ts
 ├── app/                    # Next.js App Router
 │   ├── page.tsx            # Landing/login
 │   ├── layout.tsx          # Root layout
@@ -102,11 +108,18 @@ src/
 │   └── metrics-panel.tsx   # Dashboard charts
 ├── lib/
 │   ├── db.ts               # Prisma singleton
-│   ├── auth.ts             # NextAuth v5 config
+│   ├── rate-limit.ts       # In-process limiter backing src/proxy.ts
+│   ├── login-throttle.ts   # Per-account login-attempt throttle
+│   ├── api-auth.ts         # API key + HTTP Basic auth for v1 routes
+│   ├── api-pagination.ts   # Shared ?limit= parsing for v1 list routes
+│   ├── api-formatters.ts   # v1 response shaping + Prisma include shapes
 │   ├── projects.ts         # Project CRUD + provisioning
+│   ├── project-membership.ts # Tenant/assignee validation (findNonMemberIds)
+│   ├── metrics.ts          # getProjectMetrics() — dashboard + v1 single source
 │   ├── flaky-detection.ts  # Flaky test detection
 │   ├── failure-category.ts # Failure categorization
 │   ├── junit.ts            # JUnit XML parsing
+│   ├── csv.ts              # CSV escaping + formula-injection defence
 │   ├── test-case-ids.ts    # ID generation (TC-0001)
 │   └── utils.ts            # cn() helper
 └── types/                  # Shared TypeScript types
@@ -121,6 +134,11 @@ prisma/schema.prisma        # DB schema (single source of truth)
 - NextAuth v5 beta with Prisma adapter
 - `await auth()` in server components to check session
 - Config: `src/auth.ts` + `src/app/api/auth/[...nextauth]/route.ts`
+- Per-account login-attempt throttling: `src/lib/login-throttle.ts` (credentials login in
+  `authorize()`, HTTP Basic auth in `resolveBasicAuth()` / `src/lib/api-auth.ts`)
+- `src/proxy.ts` (exported as `auth(handleProxy)`, run on every request) is
+  where the setup gate, the `/admin` + `/setup/settings` guard, the
+  `mustChangePassword` redirect, and IP/circuit-breaker rate limiting all actually live
 
 ### Project Provisioning
 - `ensureProjectForUser()` in `src/lib/projects.ts` creates default project on first login
@@ -172,3 +190,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 ---
 
 *Update this guide when introducing new frameworks or changing core patterns.*
+
+<!-- CODEGRAPH_START -->
+## CodeGraph
+
+In repositories indexed by CodeGraph (a `.codegraph/` directory exists at the repo root), reach for it BEFORE grep/find or reading files when you need to understand or locate code:
+
+- **MCP tool** (when available): `codegraph_explore` answers most code questions in one call — the relevant symbols' verbatim source plus the call paths between them, including dynamic-dispatch hops grep can't follow. Name a file or symbol in the query to read its current line-numbered source. If it's listed but deferred, load it by name via tool search.
+- **Shell** (always works): `codegraph explore "<symbol names or question>"` prints the same output.
+
+If there is no `.codegraph/` directory, skip CodeGraph entirely — indexing is the user's decision.
+<!-- CODEGRAPH_END -->

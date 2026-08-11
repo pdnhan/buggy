@@ -143,3 +143,11 @@ export async function userHasProjectAccess(userId: string, projectId: string) {
 
   return Boolean(member);
 }
+
+// Membership alone (userHasProjectAccess) admits VIEWER — appropriate for
+// reads, wrong for writes. VIEWER is meant to be read-only; use this for any
+// route that creates, updates, or deletes project-scoped data.
+export async function userCanWriteToProject(userId: string, projectId: string): Promise<boolean> {
+  const role = await getProjectRole(userId, projectId);
+  return role === "ADMIN" || role === "MEMBER";
+}

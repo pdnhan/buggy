@@ -1,0 +1,90 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+# CQ-115: no workflow-level permissions previously meant every job ran with
+# the default GITHUB_TOKEN permissions (broad — includes write access on
+# several scopes), even though neither job here needs anything beyond
+# reading the repo checkout. Least privilege by default; a job that needs
+# more (e.g. to comment on a PR) should grant it on that job specifically.
+permissions:
+  contents: read
+
+# CQ-115: without this, pushing several commits in quick succession queues
+# up a full duplicate CI run per push instead of superseding the
+# in-progress one for the same ref — wasted minutes on every rapid
+# iteration during review.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DATABASE_URL: "postgresql://buggy:buggy_password@localhost:5432/buggy?schema=public"
+  AUTH_SECRET: "ci-only-secret-not-for-production-use"
+  NEXTAUTH_URL: "http://localhost:3000"
+
+jobs:
+  app:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    # CQ-115: caps a hung/runaway step instead of burning the default
+    # 6-hour GitHub Actions job timeout before anyone notices.
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma client
+        run: npx prisma generate
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+  mcp-server:
+    name: MCP server build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: mcp-server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mcp-server
+        run: npm ci
+
+      - name: Type check
+        working-directory: mcp-server
+        run: npx tsc --noEmit
+
+      - name: Build
+        working-directory: mcp-server
+        run: npm run build
+
+      - name: Smoke test (spawns the server, drives a real stdio exchange)
+        working-directory: mcp-server
+        run: node dist/smoke-test.js

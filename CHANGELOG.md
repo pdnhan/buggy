@@ -5,6 +5,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.7.0.0] - 2026-08-11
+
+### Added
+- Model Context Protocol (MCP) server (`mcp-server/`) exposing 24 tools over stdio so an MCP client can manage test cases, suites, bugs, runs, and metrics.
+- Public v1 API coverage for bugs (list, get, create, update, reopen) and defect reports — previously only available behind session authentication.
+- Cursor pagination for the v1 test suites endpoint (`limit`/`cursor` parameters with `next_cursor` in responses).
+- Per-account login throttling that counts only failed attempts and clears on successful sign-in.
+- GitHub Actions CI workflow running lint, type checks, tests, and the MCP server build.
+
+### Changed
+- `project_id` parameter is now optional when ingesting a test run through the v1 API; it defaults to the project the API key belongs to.
+- The v1 bugs API accepts `external_issue_id` and `issue_tracker_url` (snake_case, matching the rest of the v1 surface); the previous camelCase spellings still work.
+- Project metrics are now computed with database aggregation rather than loading every matching row, and the dashboard and metrics API return identical numbers.
+- Percentages returned by the metrics API are now rounded to one decimal place (previously full floating-point precision).
+- Database indexes were reorganised for queries the app actually issues, including an index that removes a full table scan from every dashboard page load.
+
+### Fixed
+- JUnit imports recorded failing tests as passing when a report used self-closing `<failure/>`, `<error/>`, or `<skipped/>` elements.
+- JUnit imports silently discarded results from nested `<testsuites>` sections, which merged or aggregated CI reports produce.
+- A malformed or out-of-range `time` attribute in a JUnit report could reject an entire run.
+- The MCP test-run ingestion tool failed on every invocation.
+- Bug links to an external issue tracker supplied through the MCP server were silently discarded.
+- Adding the same test case to a suite twice was rejected as invalid.
+- A non-numeric `limit` query parameter returned a server error instead of a validation error.
+- Editing a reopened bug silently reset its status.
+- Optional bug fields could not be cleared once set — an assigned developer could never be unassigned.
+- Test result updates in a manual run could silently fail, and saving notes could revert a result's status.
+- Failure categorisation misclassified failures based on file paths in stack traces, and failed to recognise common framework error names.
+- A large JUnit upload could stall the server for several seconds.
+- CSV exports could produce malformed rows when a project name contained a comma, quote, or newline.
+
+### Security
+- Project members with the VIEWER role could create and delete API keys, and write to project data through several endpoints; these now require the appropriate role.
+- Test cases from another project could be attached to a test suite.
+- User accounts from another tenant could be assigned to a bug, which exposed that user's name and email address.
+- A read-only API key could ingest test runs.
+- Changing a password did not require the current password.
+- The login rate limiter could be bypassed entirely.
+- API keys were accepted for up to a minute after expiry.
+- Administrator privileges and forced password resets did not take effect until the user's session expired.
+- The workspace configuration screen was reachable without signing in.
+
+---
+
 ## [0.6.0.0] - 2026-07-14
 
 ### Added

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { resolveBasicAuth, generateApiKey, hashApiKey } from "@/lib/api-auth";
+import { userIsProjectAdmin } from "@/lib/projects";
 
 const createKeySchema = z.object({
   project_id: z.string().min(1),
@@ -59,11 +60,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unable to create API key." }, { status: 500 });
   }
 
-  // Verify user is a member of the project
-  const membership = await db.projectMember.findUnique({
-    where: { projectId_userId: { projectId: payload.project_id, userId: user.id } },
-  });
-  if (!membership) {
+  // API keys grant READ_WRITE/READ_ONLY access to the project's data —
+  // only admins may mint them. Membership alone would let a VIEWER
+  // escalate to full write access.
+  if (!(await userIsProjectAdmin(user.id, payload.project_id))) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 

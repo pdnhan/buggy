@@ -49,26 +49,31 @@ export function AdminFlagsClient({ initialFlags }: { initialFlags: Flags }) {
     setFlags((prev) => ({ ...prev, [key]: newValue }));
     setSaving(key);
 
-    const res = await fetch("/api/admin/settings", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ [key]: newValue }),
-    });
+    try {
+      const res = await fetch("/api/admin/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [key]: newValue }),
+      });
 
-    setSaving(null);
+      if (!res.ok) {
+        setFlags((prev) => ({ ...prev, [key]: !newValue }));
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        toast.error(data.error ?? "Failed to update setting.");
+        return;
+      }
 
-    if (!res.ok) {
+      toast.success("Setting updated.");
+    } catch {
       setFlags((prev) => ({ ...prev, [key]: !newValue }));
-      const data = (await res.json()) as { error?: string };
-      toast.error(data.error ?? "Failed to update setting.");
-      return;
+      toast.error("Network error. Setting was not updated.");
+    } finally {
+      setSaving(null);
     }
-
-    toast.success("Setting updated.");
   }
 
   return (
-    <AdminLayout activeTab="flags">
+    <AdminLayout>
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Feature Flags</h2>

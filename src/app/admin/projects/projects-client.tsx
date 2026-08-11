@@ -15,7 +15,7 @@ export function AdminProjectsClient({
   initialProjects: Project[];
 }) {
   return (
-    <AdminLayout activeTab="projects">
+    <AdminLayout>
       <div className="space-y-4">
         <div>
           <h2 className="text-lg font-semibold">Projects</h2>

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
+import { ensureProjectForUser, userCanWriteToProject } from "@/lib/projects";
 import { parseJUnitXml, toCreateResultData } from "@/lib/junit";
 
 const MAX_SIZE_BYTES = 50 * 1024 * 1024;
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
       : await ensureProjectForUser(session.user.id);
 
     if (!project) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!(await userHasProjectAccess(session.user.id, project.id))) {
+    if (!(await userCanWriteToProject(session.user.id, project.id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 

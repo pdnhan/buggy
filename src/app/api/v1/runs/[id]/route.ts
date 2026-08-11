@@ -1,14 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const token = request.headers.get("authorization")?.startsWith("Bearer ")
-    ? request.headers.get("authorization")!.slice(7).trim()
-    : "";
+  const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
 
   const apiKey = await resolveApiKey(token);

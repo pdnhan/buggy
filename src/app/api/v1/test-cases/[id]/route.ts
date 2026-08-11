@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
+import { formatTestCase } from "@/lib/api-formatters";
 
 const jiraKeySchema = z
   .string()
@@ -24,41 +25,6 @@ const patchSchema = z
     jira_key: jiraKeySchema.nullable(),
   })
   .partial();
-
-function formatTestCase(tc: {
-  id: string;
-  displayId: string;
-  title: string;
-  description: string | null;
-  preconditions: string | null;
-  expectedResult: string | null;
-  tags: string[];
-  priority: string;
-  status: string;
-  jiraKey: string | null;
-  createdAt: Date;
-  module: { name: string } | null;
-}) {
-  return {
-    id: tc.id,
-    display_id: tc.displayId,
-    title: tc.title,
-    description: tc.description,
-    preconditions: tc.preconditions,
-    expected_result: tc.expectedResult,
-    tags: tc.tags,
-    priority: tc.priority,
-    status: tc.status,
-    jira_key: tc.jiraKey,
-    module: tc.module ? { name: tc.module.name } : null,
-    created_at: tc.createdAt,
-  };
-}
-
-function bearerToken(request: Request) {
-  const auth = request.headers.get("authorization");
-  return auth?.startsWith("Bearer ") ? auth.slice(7).trim() : "";
-}
 
 export async function GET(
   request: Request,

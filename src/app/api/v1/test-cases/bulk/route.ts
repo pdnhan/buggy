@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { resolveApiKey } from "@/lib/api-auth";
+import { resolveApiKey, bearerToken } from "@/lib/api-auth";
 import { reserveTestCaseDisplayIds } from "@/lib/test-case-ids";
 import { autoCorrectJiraKey } from "@/lib/jira";
 
@@ -34,9 +34,7 @@ const bulkSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const token = request.headers.get("authorization")?.startsWith("Bearer ")
-    ? request.headers.get("authorization")!.slice(7).trim()
-    : "";
+  const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing Bearer API key." }, { status: 401 });
 
   const apiKey = await resolveApiKey(token);

@@ -19,10 +19,8 @@ const tabs = [
 ] as const;
 
 export function AdminLayout({
-  activeTab,
   children,
 }: {
-  activeTab: "users" | "flags" | "projects";
   children: React.ReactNode;
 }) {
   const pathname = usePathname();

@@ -24,11 +24,23 @@ vi.mock("crypto", () => ({
 import { GET, POST } from "./route";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
+import { hashPassword } from "@/lib/password";
 
 const mockAuth = auth as ReturnType<typeof vi.fn>;
+const mockHashPassword = hashPassword as ReturnType<typeof vi.fn>;
 const mockDb = db as unknown as {
   user: { findMany: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
 };
+
+// vitest.config.ts sets mockReset: true, which resets hashPassword's
+// mockResolvedValue("hashed") (set once in the vi.mock() factory above)
+// before every test. Re-arm it to a known value here so tests can assert
+// db.user.create is called with the HASHED password, never the randomly
+// generated plaintext tempPassword.
+const HASHED_PASSWORD = "hashed:tmp-password-123";
+beforeEach(() => {
+  mockHashPassword.mockResolvedValue(HASHED_PASSWORD);
+});
 
 const adminSession = { user: { id: "u1", isWorkspaceAdmin: true } };
 const memberSession = { user: { id: "u2", isWorkspaceAdmin: false } };
@@ -129,6 +141,17 @@ describe("POST /api/admin/users", () => {
     const data = await res.json();
     expect(data.user.email).toBe("bob@example.com");
     expect(data.user.mustChangePassword).toBe(true);
-    expect(typeof data.tempPassword).toBe("string");
+    // The mock crypto.randomBytes() deterministically yields "tmp-password-123".
+    expect(data.tempPassword).toBe("tmp-password-123");
+    expect(mockHashPassword).toHaveBeenCalledWith("tmp-password-123");
+    // The stored password must be the HASHED value, not the plaintext
+    // tempPassword returned to the caller — kills a mutant that persists
+    // the raw generated password instead of hashing it first.
+    expect(mockDb.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ password: HASHED_PASSWORD }),
+      })
+    );
+    expect(mockDb.user.create.mock.calls[0][0].data.password).not.toBe("tmp-password-123");
   });
 });

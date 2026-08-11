@@ -19,16 +19,18 @@ vi.mock("@/lib/db", () => ({
 vi.mock("@/lib/projects", () => ({
   ensureProjectForUser: vi.fn(),
   userHasProjectAccess: vi.fn(),
+  userCanWriteToProject: vi.fn(),
 }));
 
 import { GET, POST } from "./route";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
+import { ensureProjectForUser, userHasProjectAccess, userCanWriteToProject } from "@/lib/projects";
 
 const mockAuth = auth as ReturnType<typeof vi.fn>;
 const mockEnsureProject = ensureProjectForUser as ReturnType<typeof vi.fn>;
 const mockHasAccess = userHasProjectAccess as ReturnType<typeof vi.fn>;
+const mockCanWrite = userCanWriteToProject as ReturnType<typeof vi.fn>;
 const mockDb = db as unknown as {
   testCase: { count: ReturnType<typeof vi.fn> };
   testSuite: {
@@ -112,11 +114,12 @@ describe("POST /api/test-suites", () => {
     expect(res.status).toBe(401);
   });
 
-  it("returns 403 when user lacks project access", async () => {
+  it("returns 403 for a VIEWER — has project access but cannot write (closes the VIEWER-write escalation)", async () => {
     mockAuth.mockResolvedValue(session);
-    mockHasAccess.mockResolvedValue(false);
+    mockCanWrite.mockResolvedValue(false);
     const res = await POST(makePostRequest({ name: "New Suite", projectId: "p1" }));
     expect(res.status).toBe(403);
+    expect(mockDb.testSuite.create).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid payload (empty name)", async () => {
@@ -136,7 +139,7 @@ describe("POST /api/test-suites", () => {
   // Bug 1: cross-project test case validation
   it("returns 422 when testCaseIds include IDs not belonging to the project", async () => {
     mockAuth.mockResolvedValue(session);
-    mockHasAccess.mockResolvedValue(true);
+    mockCanWrite.mockResolvedValue(true);
     mockDb.testCase.count.mockResolvedValue(1); // only 1 of the 2 IDs found in project
     const res = await POST(
       makePostRequest({
@@ -152,7 +155,7 @@ describe("POST /api/test-suites", () => {
 
   it("skips ownership check and succeeds when testCaseIds is empty", async () => {
     mockAuth.mockResolvedValue(session);
-    mockHasAccess.mockResolvedValue(true);
+    mockCanWrite.mockResolvedValue(true);
     mockDb.testSuite.create.mockResolvedValue({ id: "s1", name: "Empty Suite", cases: [] });
     const res = await POST(makePostRequest({ name: "Empty Suite", projectId: "p1" }));
     expect(mockDb.testCase.count).not.toHaveBeenCalled();
@@ -162,7 +165,7 @@ describe("POST /api/test-suites", () => {
   // Bug 2: duplicate suite name → 409 instead of 500
   it("returns 409 when suite name already exists in the project", async () => {
     mockAuth.mockResolvedValue(session);
-    mockHasAccess.mockResolvedValue(true);
+    mockCanWrite.mockResolvedValue(true);
     const { Prisma } = await import("@prisma/client");
     const dupError = new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
       code: "P2002",
@@ -177,7 +180,7 @@ describe("POST /api/test-suites", () => {
 
   it("returns 201 with the created suite on success (no test cases)", async () => {
     mockAuth.mockResolvedValue(session);
-    mockHasAccess.mockResolvedValue(true);
+    mockCanWrite.mockResolvedValue(true);
     const suite = { id: "s1", name: "Smoke Tests", description: null, projectId: "p1", cases: [] };
     mockDb.testSuite.create.mockResolvedValue(suite);
     const res = await POST(makePostRequest({ name: "Smoke Tests", projectId: "p1" }));
@@ -188,7 +191,7 @@ describe("POST /api/test-suites", () => {
 
   it("returns 201 with the created suite on success (with test cases)", async () => {
     mockAuth.mockResolvedValue(session);
-    mockHasAccess.mockResolvedValue(true);
+    mockCanWrite.mockResolvedValue(true);
     mockDb.testCase.count.mockResolvedValue(2); // both IDs belong to the project
     const suite = {
       id: "s1",

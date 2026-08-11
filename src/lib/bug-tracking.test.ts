@@ -210,7 +210,10 @@ describe("resolveLeakage", () => {
     const result = resolveLeakage("PRODUCTION", { isLeaked: false, reason: "irrelevant" });
     expect(result.isLeaked).toBe(true);
     expect(result.leakageOverridden).toBe(false);
-    expect(result.error).toBeTruthy();
+    expect(result.leakageOverrideReason).toBeNull();
+    expect(result.error).toBe(
+      "Production bugs must always be classified as leaked and cannot be overridden."
+    );
   });
 });
 

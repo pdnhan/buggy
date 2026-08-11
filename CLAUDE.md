@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. Also check AGENTS.MD file for further guidance.
 
 ## Commands
 
@@ -19,8 +19,12 @@ npx prisma studio        # GUI browser
 # Testing (Vitest)
 npx vitest run                              # All tests
 npx vitest run src/lib/foo.test.ts          # Single file
-npx vitest run --grep "pattern"             # By pattern
+npx vitest run -t "pattern"                 # By pattern (Vitest's CLI has no --grep)
 npx vitest run --coverage                   # With coverage
+
+# Note: vitest.config.ts sets mockReset: true — mocks must be armed per-test
+# in beforeEach(), not in vi.mock() factory, since factory-time mockResolvedValue
+# gets wiped at the start of each test.
 ```
 
 ## Local Development Setup
@@ -38,6 +42,8 @@ For full stack (DB + app + migrations): `docker compose up --build -d`
 
 ```
 src/
+├── proxy.ts                             # Every auth/rate-limit gate in the app (see below)
+├── auth.ts                              # NextAuth v5 config (JWT strategy) — NOT src/lib/auth.ts
 ├── app/
 │   ├── page.tsx / login/ / register/   # Auth pages
 │   ├── dashboard/[projectId]/          # Per-project routes (tests, metrics, settings)
@@ -53,11 +59,18 @@ src/
 │   └── active-run-panel.tsx / run-report.tsx / settings-panel.tsx
 ├── lib/
 │   ├── db.ts                           # Prisma singleton — always import from here
-│   ├── auth.ts                         # NextAuth v5 config (JWT strategy)
+│   ├── rate-limit.ts                   # In-process fixed-window limiter used by src/proxy.ts
+│   ├── login-throttle.ts               # Per-account failed-login-attempt throttle
+│   ├── api-auth.ts                     # API key auth + HTTP Basic auth for v1 routes
+│   ├── api-pagination.ts               # Shared ?limit= parsing for v1 list routes
+│   ├── api-formatters.ts               # v1 response shaping + Prisma include shapes
 │   ├── projects.ts                     # ensureProjectForUser() — auto-provisions on first login
+│   ├── project-membership.ts           # findNonMemberIds() — shared tenant/assignee validation
+│   ├── metrics.ts                      # getProjectMetrics() — single source for dashboard + v1
 │   ├── flaky-detection.ts              # Flaky test detection across last 5 runs
 │   ├── failure-category.ts             # Failure categorization logic
 │   ├── junit.ts                        # JUnit XML parsing
+│   ├── csv.ts                          # CSV escaping + formula-injection defence
 │   └── test-case-ids.ts                # TC-0001 style ID generation
 ├── types/                              # Shared TypeScript types
 prisma/schema.prisma                    # Single source of truth for DB schema
@@ -68,8 +81,14 @@ prisma/schema.prisma                    # Single source of truth for DB schema
 ### Auth & Authorization
 - `await auth()` in server components to get the session
 - Always verify the user is a `ProjectMember` before any project mutation
-- `src/auth.ts` uses credentials (email/password + bcrypt) with JWT sessions
-- Public API (`/api/v1/runs`) uses bearer API keys hashed in the `api_keys` table
+- `src/auth.ts` uses credentials (email/password + bcrypt) with JWT sessions; per-account
+  login-attempt throttling lives in `authorize()` here (via `src/lib/login-throttle.ts`)
+- Public API (`/api/v1/`*) uses bearer API keys hashed in the `api_keys` table; per-account
+  throttling for HTTP Basic auth lives in `resolveBasicAuth()` (`src/lib/api-auth.ts`)
+- `src/proxy.ts` is where every request-level gate actually lives — the
+  setup-completion redirect, the `/admin` + `/setup/settings` admin guard,
+  the `mustChangePassword` redirect, and IP/circuit-breaker rate limiting
+  (see `TRUST_PROXY_HOPS` below)
 
 ### Data Model Highlights
 - `Project` has `testCasePrefix` + `testCaseCounter` for sequential display IDs (e.g. `TC-0001`)
@@ -94,7 +113,14 @@ prisma/schema.prisma                    # Single source of truth for DB schema
 
 ### API Routes
 - Internal: `src/app/api/<resource>/route.ts` — session-authenticated
-- Public v1: `src/app/api/v1/<resource>/route.ts` — API key authenticated
+- Public v1: `src/app/api/v1/<resource>/route.ts` — bearer API key authenticated
+  - `runs/` — list, get, ingest (automated test results)
+  - `test-cases/` — list, get, create, update, delete, bulk create
+  - `test-suites/` — list, get, create, update, delete, add/remove cases (cursor pagination)
+  - `bugs/` — list, get, create; `[id]/` — update; `[id]/reopen/` — reopen
+  - `defect-reports/` — list, create (log reports)
+  - `metrics/` — get project metrics
+  - `api-keys/` — create (via Basic auth), list (for the authenticated user)
 - Zod for request validation; return `NextResponse.json({ error }, { status })` on failures
 
 ## Environment Variables
@@ -106,6 +132,18 @@ Required in `.env`:
 - `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` — used by docker-compose
 
 Feature flags (default `false`): `ENABLE_SESSION_TESTING`, `ENABLE_RELEASE_TRACKING`
+
+Optional (rate limiting):
+- `TRUST_PROXY_HOPS` — number of reverse proxy hops in front of this app that
+  are trusted to set `X-Forwarded-For` correctly (default `0`, matching the
+  default `docker-compose.yml` deployment, which publishes the app port
+  directly). IP-based rate limiting in `src/proxy.ts` requires this: left at `0`,
+  the app cannot trust per-client headers and falls back to a coarse, shared
+  circuit breaker (volume brake only, not per-client fairness) to avoid
+  self-DoS on normal traffic. Set it to the number of real proxy hops (usually `1`)
+  once a reverse proxy sits in front of this app to get real per-client IP limiting.
+  Per-account login/API-key throttling lives separately in `src/lib/login-throttle.ts`
+  and `src/lib/api-auth.ts` and does not depend on `TRUST_PROXY_HOPS`.
 
 ## Commit Style
 

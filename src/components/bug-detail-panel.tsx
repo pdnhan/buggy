@@ -96,13 +96,13 @@ export function BugDetailPanel({ projectId, role, bug, modules, members }: Props
   async function saveEdit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSavingEdit(true);
-    const payload = buildBugPayload(event.currentTarget);
+    const payload = buildBugPayload(event.currentTarget, { clearEmpty: true });
 
     try {
       const response = await fetch(`/api/bugs/${bug.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload, moduleName: payload.moduleName ?? null }),
+        body: JSON.stringify(payload),
       });
       if (!response.ok) {
         const body = (await response.json().catch(() => ({}))) as { error?: string };

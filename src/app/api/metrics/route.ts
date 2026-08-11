@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
-import { ensureProjectForUser, userHasProjectAccess } from "@/lib/projects";
+import { ensureProjectForUser, userHasProjectAccess, userCanWriteToProject } from "@/lib/projects";
+import { getProjectMetrics } from "@/lib/metrics";
 
 const createReportSchema = z.object({
   projectId: z.string().min(1).optional(),
@@ -33,82 +34,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  // ── Defect reports (manual inputs) ──────────────────────────────────────────
-  const reports = await db.defectReport.findMany({
-    where: { projectId: project.id },
-    orderBy: { reportedAt: "desc" },
-    take: 10,
-  });
-
-  const latest = reports[0] ?? null;
-
-  // ── Test coverage ────────────────────────────────────────────────────────────
-  const testCoverage =
-    latest && latest.totalRequirements > 0
-      ? (latest.requirementsCovered / latest.totalRequirements) * 100
-      : null;
-
-  // ── DDP — Defect Detection Percentage ───────────────────────────────────────
-  const totalBugs = latest
-    ? latest.testingBugsFound + latest.productionBugsFound
-    : 0;
-  const ddp = totalBugs > 0 && latest ? (latest.testingBugsFound / totalBugs) * 100 : null;
-
-  // ── Escaped defects & defect leakage ────────────────────────────────────────
-  const escapedDefects = latest?.productionBugsFound ?? null;
-  const defectLeakage = escapedDefects; // same metric, different framing
-
-  // ── Defect density per module (from TestResult failures) ────────────────────
-  const failedResults = await db.testResult.findMany({
-    where: { run: { projectId: project.id }, status: { in: ["FAILED", "ERROR"] } },
-    select: { suite: true },
-  });
-
-  const densityMap: Record<string, number> = {};
-  for (const r of failedResults) {
-    const key = r.suite ?? "No module";
-    densityMap[key] = (densityMap[key] ?? 0) + 1;
-  }
-  const defectDensity = Object.entries(densityMap).map(([module, count]) => ({ module, count }));
-
-  // ── Time to confidence: average duration of completed manual runs ─────────────
-  const completedRuns = await db.testRun.findMany({
-    where: { projectId: project.id, status: "COMPLETED", source: "MANUAL", completedAt: { not: null } },
-    select: { startedAt: true, completedAt: true },
-  });
-
-  const avgTimeToConfidenceMs =
-    completedRuns.length > 0
-      ? completedRuns.reduce(
-          (sum, r) => sum + (r.completedAt!.getTime() - r.startedAt.getTime()),
-          0
-        ) / completedRuns.length
-      : null;
-
-  // ── Historical series for sparklines ────────────────────────────────────────
-  const history = reports.reverse().map((r) => ({
-    date: r.reportedAt.toISOString(),
-    testCoverage:
-      r.totalRequirements > 0 ? (r.requirementsCovered / r.totalRequirements) * 100 : 0,
-    ddp:
-      r.testingBugsFound + r.productionBugsFound > 0
-        ? (r.testingBugsFound / (r.testingBugsFound + r.productionBugsFound)) * 100
-        : 0,
-    escapedDefects: r.productionBugsFound,
-    testingBugs: r.testingBugsFound,
-  }));
-
-  return NextResponse.json({
-    projectId: project.id,
-    testCoverage,
-    ddp,
-    escapedDefects,
-    defectLeakage,
-    defectDensity,
-    avgTimeToConfidenceMs,
-    latestReport: latest,
-    history,
-  });
+  const metrics = await getProjectMetrics(project.id);
+  return NextResponse.json(metrics);
 }
 
 // ─── POST /api/metrics — log a new defect report ─────────────────────────────
@@ -124,7 +51,7 @@ export async function POST(request: Request) {
       : await ensureProjectForUser(session.user.id);
 
     if (!project) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    if (!(await userHasProjectAccess(session.user.id, project.id))) {
+    if (!(await userCanWriteToProject(session.user.id, project.id))) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
